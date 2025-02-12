@@ -36,16 +36,39 @@ describe("MongoAdapter", () => {
       await newAdapter.disconnect();
     }, 10000);
 
-    test("should throw error with invalid connection string", async () => {
-      const invalidAdapter = new MongoAdapter("not-a-mongodb-url", "phoenixstore_test");
-      try {
-        await invalidAdapter.connect();
-        throw new Error("Should not reach here");
-      } catch (error) {
-        expect(error).toBeInstanceOf(PhoenixStoreError);
-        expect(error.code).toBe("MONGODB_CONNECTION_ERROR");
+    test("should handle various invalid connection strings", async () => {
+      const invalidCases = [
+        {
+          uri: "not-a-mongodb-url",
+          description: "completely invalid URL"
+        },
+        {
+          uri: "mongodb://invalid@:password@localhost:27017",
+          description: "malformed authentication"
+        },
+        {
+          uri: "postgresql://localhost:27017",
+          description: "wrong protocol"
+        }
+      ];
+
+      for (const { uri, description } of invalidCases) {
+        let invalidAdapter: MongoAdapter;
+        try {
+          // First try to create the adapter
+          invalidAdapter = new MongoAdapter(uri, "phoenixstore_test");
+          
+          // If creation succeeds, try to connect
+          await invalidAdapter.connect();
+          throw new Error(`Should have failed for ${description}`);
+        } catch (error: any) {
+          // The error could come from either constructor or connect()
+          expect(error).toBeInstanceOf(PhoenixStoreError);
+          expect(error.code).toBe("MONGODB_CONNECTION_ERROR");
+          expect(error.message).toContain("Failed to connect to MongoDB");
+        }
       }
-    });
+    }, 10000);
   });
 
   describe("CRUD Operations", () => {

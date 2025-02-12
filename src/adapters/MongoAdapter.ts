@@ -6,15 +6,33 @@ export class MongoAdapter {
   private db: Db | null = null;
 
   constructor(private uri: string, private dbName: string) {
-    this.client = new MongoClient(uri);
+    try {
+      this.client = new MongoClient(uri);
+    } catch (error) {
+      throw new PhoenixStoreError(
+        'Failed to connect to MongoDB: Invalid connection string format',
+        'MONGODB_CONNECTION_ERROR',
+        error as Error
+      );
+    }
   }
 
   async connect(): Promise<void> {
     try {
-      await this.client.connect();
+      // Add a 3 second timeout to the connection attempt
+      const connectPromise = this.client.connect();
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Connection timeout')), 3000);
+      });
+
+      await Promise.race([connectPromise, timeoutPromise]);
       this.db = this.client.db(this.dbName);
       console.log('Successfully connected to MongoDB');
     } catch (error) {
+      // Ensure any MongoDB-specific errors are wrapped in our PhoenixStoreError
+      if (error instanceof PhoenixStoreError) {
+        throw error;
+      }
       throw new PhoenixStoreError(
         'Failed to connect to MongoDB',
         'MONGODB_CONNECTION_ERROR',
