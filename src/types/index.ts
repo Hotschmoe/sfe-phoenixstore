@@ -6,8 +6,6 @@ export type QueryOperator =
   | '<=' 
   | '>' 
   | '>=' 
-  | 'array-contains' 
-  | 'array-contains-any' 
   | 'in' 
   | 'not-in';
 
@@ -15,14 +13,14 @@ export type OrderDirection = 'asc' | 'desc';
 
 export interface QueryOptions {
   limit?: number;
+  offset?: number;
   orderBy?: string;
   orderDirection?: OrderDirection;
-  startAfter?: any;
-  endBefore?: any;
 }
 
 // Document Types
 export interface DocumentData {
+  id?: string;
   [field: string]: any;
 }
 
@@ -36,6 +34,13 @@ export interface DocumentSnapshot<T = DocumentData> {
 export interface CollectionReference<T = DocumentData> {
   id: string;
   path: string;
+}
+
+// Query Types
+export interface QueryCondition {
+  field: string;
+  operator: QueryOperator;
+  value: any;
 }
 
 // Error Types

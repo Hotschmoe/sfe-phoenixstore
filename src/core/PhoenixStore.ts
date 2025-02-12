@@ -1,5 +1,5 @@
 import { MongoAdapter } from '../adapters/MongoAdapter';
-import { DocumentData, QueryOptions, PhoenixStoreError } from '../types';
+import { DocumentData, QueryOperator, QueryOptions, QueryCondition, PhoenixStoreError } from '../types';
 
 export class PhoenixStore {
   private adapter: MongoAdapter;
@@ -18,6 +18,36 @@ export class PhoenixStore {
 
   collection<T extends DocumentData = DocumentData>(name: string) {
     const adapter = this.adapter;
+
+    class Query {
+      private conditions: QueryCondition[] = [];
+      private queryOptions: QueryOptions = {};
+
+      where(field: string, operator: QueryOperator, value: any): Query {
+        this.conditions.push({ field, operator, value });
+        return this;
+      }
+
+      orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): Query {
+        this.queryOptions.orderBy = field;
+        this.queryOptions.orderDirection = direction;
+        return this;
+      }
+
+      limit(limit: number): Query {
+        this.queryOptions.limit = limit;
+        return this;
+      }
+
+      offset(offset: number): Query {
+        this.queryOptions.offset = offset;
+        return this;
+      }
+
+      async get(): Promise<T[]> {
+        return adapter.query<T>(name, this.conditions, this.queryOptions);
+      }
+    }
 
     class DocumentReference {
       constructor(private id: string) {}
@@ -46,6 +76,21 @@ export class PhoenixStore {
 
       doc(id: string): DocumentReference {
         return new DocumentReference(id);
+      },
+
+      where(field: string, operator: QueryOperator, value: any): Query {
+        const query = new Query();
+        return query.where(field, operator, value);
+      },
+
+      orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): Query {
+        const query = new Query();
+        return query.orderBy(field, direction);
+      },
+
+      limit(limit: number): Query {
+        const query = new Query();
+        return query.limit(limit);
       }
     };
   }

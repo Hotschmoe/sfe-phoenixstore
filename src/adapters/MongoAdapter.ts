@@ -1,4 +1,4 @@
-import { MongoClient, Collection, Db, ObjectId } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId, Filter, Sort } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 
 export class MongoAdapter {
@@ -70,6 +70,105 @@ export class MongoAdapter {
       'array-contains-any': '$in'
     };
     return operatorMap[operator];
+  }
+
+  // Query builder method
+  async query<T extends DocumentData>(
+    collectionName: string,
+    conditions: { field: string; operator: QueryOperator; value: any }[],
+    options: QueryOptions = {}
+  ): Promise<T[]> {
+    const collection = this.getCollection<T>(collectionName);
+    
+    try {
+      // Build MongoDB query from conditions
+      const filter = this.buildFilter(conditions);
+      
+      // Build sort options
+      const sort = this.buildSort(options.orderBy, options.orderDirection);
+      
+      // Create query
+      let query = collection.find(filter);
+      
+      // Apply sorting
+      if (sort) {
+        query = query.sort(sort);
+      }
+      
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+      if (options.offset) {
+        query = query.skip(options.offset);
+      }
+      
+      // Execute query
+      const results = await query.toArray();
+      
+      // Transform results to include string IDs
+      return results.map(doc => {
+        const { _id, ...rest } = doc;
+        return { id: _id.toString(), ...rest } as T;
+      });
+    } catch (error) {
+      if (error instanceof PhoenixStoreError) {
+        throw error; // Re-throw PhoenixStoreError with original code
+      }
+      throw new PhoenixStoreError(
+        'Failed to execute query',
+        'QUERY_ERROR',
+        error as Error
+      );
+    }
+  }
+
+  private buildFilter(conditions: { field: string; operator: QueryOperator; value: any }[]): Filter<any> {
+    const filter: Record<string, any> = {};
+    
+    for (const { field, operator, value } of conditions) {
+      switch (operator) {
+        case '==':
+          filter[field] = { $eq: value };
+          break;
+        case '!=':
+          filter[field] = { $ne: value };
+          break;
+        case '<':
+          filter[field] = { $lt: value };
+          break;
+        case '<=':
+          filter[field] = { $lte: value };
+          break;
+        case '>':
+          filter[field] = { $gt: value };
+          break;
+        case '>=':
+          filter[field] = { $gte: value };
+          break;
+        case 'in':
+          filter[field] = { $in: value };
+          break;
+        case 'not-in':
+          filter[field] = { $nin: value };
+          break;
+        default:
+          throw new PhoenixStoreError(
+            `Unsupported operator: ${operator}`,
+            'INVALID_OPERATOR'
+          );
+      }
+    }
+    
+    return filter;
+  }
+
+  private buildSort(field?: string, direction: 'asc' | 'desc' = 'asc'): Sort | undefined {
+    if (!field) return undefined;
+    
+    return {
+      [field]: direction === 'asc' ? 1 : -1
+    };
   }
 
   // Basic CRUD operations
