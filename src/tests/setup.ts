@@ -5,46 +5,59 @@ import { config } from '../utils/config';
 const TEST_DB_NAME = `${config.MONGODB_DATABASE}_test`;
 
 export const getTestDbUri = () => {
-  // Parse the existing URI to maintain authentication
-  const currentUri = new URL(config.MONGODB_URI);
-  
-  // Create new URI with test database
-  const testUri = new URL(currentUri.toString());
-  testUri.pathname = `/${TEST_DB_NAME}`;
-  
-  return testUri.toString();
+  // Create test URI with authentication
+  return `mongodb://phoenixuser:phoenixpass@localhost:27017/${TEST_DB_NAME}?authSource=admin`;
 };
 
 export const cleanupDatabase = async () => {
+  console.log('Connecting to MongoDB...');
   const client = new MongoClient(getTestDbUri());
+  
   try {
     await client.connect();
+    console.log('Connected to MongoDB');
+    
     const db = client.db(TEST_DB_NAME);
+    console.log('Cleaning up test database...');
+    
     // Drop all collections
     const collections = await db.listCollections().toArray();
     for (const collection of collections) {
-      await db.collection(collection.name).drop().catch(() => {
-        // Ignore errors if collection doesn't exist
-      });
+      try {
+        await db.collection(collection.name).drop();
+        console.log(`Dropped collection: ${collection.name}`);
+      } catch (error) {
+        console.log(`Error dropping collection ${collection.name}:`, error);
+      }
     }
   } catch (error) {
     console.error('Failed to cleanup test database:', error);
+    throw error; // Re-throw to fail the test setup
   } finally {
     await client.close();
+    console.log('Closed MongoDB connection');
   }
 };
 
 // Run before all tests
 export const setup = async () => {
-  // Ensure we're using test database
-  if (!process.env.MONGODB_URI?.includes('test')) {
-    console.log('Setting up test database...');
+  try {
+    console.log('Setting up test environment...');
     await cleanupDatabase();
+    console.log('Test environment setup complete');
+  } catch (error) {
+    console.error('Test setup failed:', error);
+    process.exit(1); // Exit if we can't set up the test environment
   }
 };
 
 // Run after all tests
 export const teardown = async () => {
-  console.log('Cleaning up test database...');
-  await cleanupDatabase();
+  try {
+    console.log('Cleaning up test environment...');
+    await cleanupDatabase();
+    console.log('Test environment cleanup complete');
+  } catch (error) {
+    console.error('Test teardown failed:', error);
+  }
 };

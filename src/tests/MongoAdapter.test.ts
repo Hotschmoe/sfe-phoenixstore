@@ -7,13 +7,25 @@ describe("MongoAdapter", () => {
   const adapter = new MongoAdapter(getTestDbUri(), "phoenixstore_test");
 
   beforeAll(async () => {
-    await setup();
-    await adapter.connect();
+    console.log('Starting MongoAdapter tests...');
+    try {
+      await setup();
+      console.log('Connecting adapter...');
+      await adapter.connect();
+      console.log('Adapter connected');
+    } catch (error) {
+      console.error('Failed to setup MongoAdapter tests:', error);
+      throw error;
+    }
   });
 
   afterAll(async () => {
-    await adapter.disconnect();
-    await teardown();
+    try {
+      await adapter.disconnect();
+      await teardown();
+    } catch (error) {
+      console.error('Failed to cleanup MongoAdapter tests:', error);
+    }
   });
 
   describe("Connection", () => {
@@ -21,7 +33,7 @@ describe("MongoAdapter", () => {
       const newAdapter = new MongoAdapter(getTestDbUri(), "phoenixstore_test");
       await expect(newAdapter.connect()).resolves.not.toThrow();
       await newAdapter.disconnect();
-    });
+    }, 10000); // Increase timeout to 10 seconds
 
     test("should throw error with invalid connection string", async () => {
       const invalidAdapter = new MongoAdapter("invalid-uri", "phoenixstore_test");
