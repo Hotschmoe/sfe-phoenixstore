@@ -14,8 +14,11 @@
     "test:coverage": "bun test --coverage src/tests/**/*.test.ts"
   },
   "dependencies": {
-    "mongodb": "^6.3.0",
-    "dotenv": "^16.4.1"
+    "@elysiajs/cors": "^1.2.0",
+    "@elysiajs/swagger": "^1.2.0",
+    "dotenv": "^16.4.1",
+    "elysia": "^1.2.12",
+    "mongodb": "^6.3.0"
   },
   "devDependencies": {
     "bun-types": "latest",
@@ -24,4 +27,4 @@
   },
   "author": "",
   "license": "MIT"
-} 
+}
