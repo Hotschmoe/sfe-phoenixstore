@@ -1,18 +1,18 @@
 # Development stage
 FROM oven/bun:latest as development
-WORKDIR /src
-# COPY package.json bun.lockb ./
-COPY package.json ./
+WORKDIR /app
+COPY package.json bun.lockb ./
 RUN bun install
 COPY . .
-CMD ["bun", "run", "dev"]
+ENV NODE_ENV=development
+CMD ["bun", "--hot", "./src/index.ts"]
 
 # Production stage
 FROM oven/bun:latest as production
-WORKDIR /src
-# COPY package.json bun.lockb ./
-COPY package.json ./
+WORKDIR /app
+COPY package.json bun.lockb ./
 RUN bun install --production
 COPY . .
-RUN bun run build
-CMD ["bun", "run", "start"] 
+ENV NODE_ENV=production
+RUN bun build ./src/index.ts --outdir ./dist
+CMD ["bun", "./dist/index.js"] 

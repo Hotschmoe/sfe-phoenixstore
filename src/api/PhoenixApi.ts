@@ -3,6 +3,7 @@ import { cors } from '@elysiajs/cors';
 import { swagger } from '@elysiajs/swagger';
 import { PhoenixStore } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError } from '../types';
+import { homeHtml } from './home';
 
 /**
  * PhoenixApi provides a REST API interface for PhoenixStore
@@ -35,6 +36,15 @@ export class PhoenixApi {
   }
 
   private setupRoutes() {
+    // Root endpoint with API information
+    this.app.get('/', () => {
+      return new Response(homeHtml, {
+        headers: {
+          'Content-Type': 'text/html'
+        }
+      });
+    });
+
     // Create document
     this.app.post('/api/v1/:collection', async ({ params, body }) => {
       try {
@@ -113,8 +123,33 @@ export class PhoenixApi {
   }
 
   public start(port: number) {
-    this.app.listen(port);
-    console.log(`🚀 PhoenixStore API running at http://localhost:${port}`);
-    console.log(`📚 Swagger docs available at http://localhost:${port}/swagger`);
+    // Force immediate flushing of console output
+    console.log = (...args) => {
+      process.stdout.write(args.join(' ') + '\n');
+    };
+
+    // Clear screen and show banner
+    console.log('\x1Bc'); // Clear console
+    console.log('='.repeat(50));
+    console.log('🔥  PhoenixStore Server');
+    console.log('='.repeat(50));
+
+    this.app.listen({
+      port,
+      hostname: '0.0.0.0'
+    }, ({ hostname, port }) => {
+      // Server status messages
+      console.log('\n📡 Server Status:');
+      console.log('-------------------');
+      console.log(`⚡ Mode: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🌐 Host: ${hostname === '0.0.0.0' ? 'All Interfaces (0.0.0.0)' : hostname}`);
+      console.log(`🚪 Port: ${port}`);
+      console.log('\n📍 Access Points:');
+      console.log('-------------------');
+      console.log(`🏠 Homepage: http://localhost:${port}`);
+      console.log(`📚 Swagger UI: http://localhost:${port}/swagger`);
+      console.log(`🔌 API Base: http://localhost:${port}/api/v1`);
+      console.log('\n✨ Server is ready to accept connections\n');
+    });
   }
 } 

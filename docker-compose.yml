@@ -12,12 +12,15 @@ services:
       - MONGODB_URI=${MONGODB_URI}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
       - PORT=${PORT}
-      - NODE_ENV=${NODE_ENV}
+      - NODE_ENV=development
     env_file:
       - .env
     depends_on:
       - mongodb
-    command: bun run dev
+    tty: true
+    stdin_open: true
+    command: bun --hot ./src/index.ts
+    restart: unless-stopped
 
   mongodb:
     image: mongo:latest
