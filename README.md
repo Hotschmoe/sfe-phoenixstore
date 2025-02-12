@@ -1,233 +1,169 @@
-# SFE - PhoenixStore: A Drop-in Firestore Replacement
+# SFE - PhoenixStore 🔥
 
-A MongoDB-based Firestore alternative with familiar syntax for Flutter/Web projects. Built with Bun for performance and developer experience.
+A MongoDB-based Firestore alternative with familiar syntax for Flutter/Web projects.
 
-## Core Philosophy
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://github.com/yourusername/phoenixstore/workflows/CI/badge.svg)](https://github.com/yourusername/phoenixstore/actions)
+[![npm version](https://badge.fury.io/js/phoenixstore.svg)](https://badge.fury.io/js/phoenixstore)
 
-SFE - PhoenixStore aims to provide a self-hosted alternative to Firebase/Firestore while maintaining familiar syntax and patterns. This allows teams to:
-- Migrate away from Firebase without rewriting application logic
-- Maintain ownership of data and infrastructure
-- Scale costs predictably
-- Keep the developer experience consistent
+## Why PhoenixStore?
 
-## Tech Stack
+- 🚀 **Firestore-like API**: Familiar syntax for Firebase/Firestore developers
+- 📦 **MongoDB Backend**: Powerful, scalable document database
+- 🛠️ **Self-hosted**: Full control over your data and infrastructure
+- 🔒 **Type-safe**: Built with TypeScript for robust development
+- 🌐 **REST API**: Easy integration with any platform
+- 📱 **Flutter SDK**: Native Flutter integration (coming soon)
 
-### Backend
-- **Bun**: Fast JavaScript runtime with native TypeScript support
-- **MongoDB**: Document database with similar structure to Firestore
-- **SFE - PhoenixStore**: Our custom wrapper providing Firestore-like syntax
+## Quick Start
 
-### Infrastructure
-- **Docker**: Containerization for consistent deployment
-- **MongoDB Express**: Database management UI for development
-- **Nginx**: (Optional) Reverse proxy for production
-
-## Getting Started
+### 1. Installation
 
 ```bash
-# Clone the template
-git clone https://github.com/your-org/sfe-phoenixstore-template
+# Using bun
+bun add phoenixstore
 
-# Install dependencies
-bun install
+# Using npm
+npm install phoenixstore
 
-# Start development environment
-docker-compose up -d
+# Using yarn
+yarn add phoenixstore
 ```
 
-## Architecture
-
-### Docker Services
-```yaml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    environment:
-      - MONGODB_URL=mongodb://mongodb:27017/app
-    ports:
-      - "3000:3000"
-
-  mongodb:
-    image: mongo:latest
-    volumes:
-      - mongodb_data:/data/db
-
-  mongo-express:
-    image: mongo-express
-    ports:
-      - "8081:8081"
-    environment:
-      - ME_CONFIG_MONGODB_SERVER=mongodb
-
-volumes:
-  mongodb_data:
-```
-
-### PhoenixStore API
+### 2. Basic Usage
 
 ```typescript
+import { PhoenixStore } from 'phoenixstore';
+
 // Initialize
-const db = new PhoenixStore('mongodb://localhost:27017', 'myapp');
+const db = new PhoenixStore(
+  'mongodb://localhost:27017',
+  'your_database'
+);
+
+// Connect
 await db.connect();
 
-// CRUD Operations
-// Create
-const doc = await db.collection('users').add({
+// Add a document
+const userId = await db.collection('users').add({
+  name: 'John Doe',
+  email: 'john@example.com'
+});
+
+// Get a document
+const user = await db.collection('users').doc(userId).get();
+
+// Update a document
+await db.collection('users').doc(userId).update({
+  name: 'Jane Doe'
+});
+
+// Delete a document
+await db.collection('users').doc(userId).delete();
+```
+
+## Documentation
+
+- [Architecture Overview](docs/architecture.md)
+- [API Documentation](docs/api.md)
+- [Contributing Guide](docs/contributing.md)
+
+## Features
+
+### Current Features
+- ✅ Document CRUD operations
+- ✅ MongoDB integration
+- ✅ REST API
+- ✅ TypeScript support
+- ✅ Docker support
+- ✅ Swagger documentation
+
+### Coming Soon
+- 🚧 Query operations (where, orderBy, limit)
+- 🚧 Real-time updates
+- 🚧 Flutter SDK
+- 🚧 Authentication
+- 🚧 Security rules
+
+## Development
+
+### Prerequisites
+
+- [Bun](https://bun.sh/) (v1.0.0 or higher)
+- [Docker](https://www.docker.com/) and Docker Compose
+- [Git](https://git-scm.com/)
+
+### Setup
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/yourusername/phoenixstore.git
+   cd phoenixstore
+   ```
+
+2. Install dependencies
+   ```bash
+   bun install
+   ```
+
+3. Start services
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Run tests
+   ```bash
+   bun test
+   ```
+
+For detailed development instructions, see our [Contributing Guide](docs/contributing.md).
+
+## Examples
+
+### REST API Example
+```bash
+# Create a document
+curl -X POST http://localhost:3000/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John Doe", "email": "john@example.com"}'
+
+# Get a document
+curl http://localhost:3000/api/v1/users/123456
+```
+
+### TypeScript Example
+```typescript
+// Type-safe collections
+interface User {
+  name: string;
+  email: string;
+  age: number;
+}
+
+const users = db.collection<User>('users');
+const user = await users.add({
   name: 'John',
+  email: 'john@example.com',
   age: 30
 });
-
-// Read
-const user = await db.collection('users').doc('123').get();
-
-// Update
-await db.collection('users').doc('123').update({
-  age: 31
-});
-
-// Delete
-await db.collection('users').doc('123').delete();
-
-// Queries
-const results = await db.collection('users')
-  .where('age', '>', 21)
-  .orderBy('name', 'asc')
-  .limit(10)
-  .get();
 ```
-
-## Migration Guide
-
-### From Firestore
-1. Update connection details in your app
-2. Replace Firebase imports with PhoenixStore
-3. Update environment variables
-4. Run migration script (provided)
-
-```typescript
-// Before (Firestore)
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-
-// After (PhoenixStore)
-import { SFEPhoenixStore } from '@your-org/sfe-phoenixstore';
-```
-
-## Development Guidelines
-
-### Adding New Features
-1. Match Firestore's API syntax where possible
-2. Add MongoDB implementation in wrapper
-3. Add tests
-4. Update documentation
-
-### Testing
-```bash
-# Run test suite
-bun test
-
-# Run specific tests
-bun test --spec Auth
-```
-
-## TODO
-
-### Phase 1: Core Implementation
-- [ ] Basic CRUD operations
-- [ ] Query operations (where, orderBy, limit)
-- [ ] Authentication wrapper
-- [ ] Basic error handling
-
-### Phase 2: Advanced Features
-- [ ] Real-time updates using MongoDB Change Streams
-- [ ] Batch operations
-- [ ] Transactions
-- [ ] Advanced querying (array operations, etc.)
-
-### Phase 3: Production Readiness
-- [ ] Performance optimization
-- [ ] Connection pooling
-- [ ] Monitoring and logging
-- [ ] Production deployment guide
-
-### Phase 4: Additional Features
-- [ ] Offline support
-- [ ] Data validation
-- [ ] Migration tools
-- [ ] CLI tools
-
-## Making It Project Agnostic
-
-PhoenixStore is designed to be project-agnostic through:
-
-1. Configuration
-```typescript
-// config.ts
-export interface PhoenixStoreConfig {
-  mongodb: {
-    uri: string;
-    dbName: string;
-    options?: MongoClientOptions;
-  };
-  collections?: {
-    prefix?: string;
-    whitelist?: string[];
-  };
-  auth?: {
-    enabled: boolean;
-    provider?: 'jwt' | 'custom';
-  };
-}
-```
-
-2. Middleware Support
-```typescript
-// Add custom middleware
-db.use(async (ctx, next) => {
-  // Custom logic
-  await next();
-});
-```
-
-3. Plugin System (TODO)
-```typescript
-// Add functionality without modifying core
-db.plugin('myFeature', {
-  // Plugin configuration
-});
-```
-
-## Why These Choices?
-
-### MongoDB
-- Document-based like Firestore
-- Mature, well-supported
-- Rich query capabilities
-- Change streams for real-time updates
-- Good performance at scale
-
-### Bun
-- Fast startup and execution
-- Native TypeScript support
-- Built-in testing
-- Modern JavaScript features
-- Growing ecosystem
-
-### Docker
-- Consistent development environment
-- Easy deployment
-- Scalable architecture
-- Simple local development
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+We welcome contributions! Please see our [Contributing Guide](docs/contributing.md) for details.
 
-See CONTRIBUTING.md for detailed guidelines.
+## Support
+
+- 📖 [Documentation](docs/)
+- 💬 [Discord Community](https://discord.gg/your-server)
+- 🐛 [Issue Tracker](https://github.com/yourusername/phoenixstore/issues)
 
 ## License
 
-TBD
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Inspired by Firebase Firestore
+- Built with [Bun](https://bun.sh/)
+- Powered by [MongoDB](https://www.mongodb.com/)
