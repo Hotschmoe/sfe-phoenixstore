@@ -40,14 +40,26 @@ export const homeHtml = `<!DOCTYPE html>
       a:hover {
         text-decoration: underline;
       }
+      .ascii-art {
+        font-family: monospace;
+        white-space: pre;
+        margin: 1rem 0;
+        color: #2563eb;
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>🔥 PhoenixStore API</h1>
+      <div class="ascii-art">
+    ____  __                      _      _____ __                 
+   / __ \\/ /_  ____  ___  ____  (_)_  _/ ___// /_____  ________ 
+  / /_/ / __ \\/ __ \\/ _ \\/ __ \\/ /| |/_\\__ \\/ __/ __ \\/ ___/ _ \\
+ / ____/ / / / /_/ /  __/ / / / />  < ___/ / /_/ /_/ / /  /  __/
+/_/   /_/ /_/\\____/\\___/_/ /_/_/_/|_/____/\\__/\\____/_/   \\___/ 
+      </div>
       <p>A MongoDB-based Firestore alternative with familiar syntax for Flutter/Web projects</p>
       
-      <h2>📚 API Endpoints</h2>
+      <h2>[API] Endpoints</h2>
       <div class="endpoints">
         <div class="endpoint">POST /api/v1/:collection - Create document</div>
         <div class="endpoint">GET /api/v1/:collection/:id - Read document</div>
@@ -56,7 +68,7 @@ export const homeHtml = `<!DOCTYPE html>
       </div>
 
       <div class="links">
-        <h2>🔗 Useful Links</h2>
+        <h2>[->] Useful Links</h2>
         <p><a href="/swagger">API Documentation (Swagger)</a></p>
         <p><a href="https://github.com/yourusername/phoenixstore">GitHub Repository</a></p>
       </div>

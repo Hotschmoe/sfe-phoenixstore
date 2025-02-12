@@ -131,7 +131,7 @@ export class PhoenixApi {
     // Clear screen and show banner
     console.log('\x1Bc'); // Clear console
     console.log('='.repeat(50));
-    console.log('🔥  PhoenixStore Server');
+    console.log('[-] PhoenixStore Server');
     console.log('='.repeat(50));
 
     this.app.listen({
@@ -139,17 +139,17 @@ export class PhoenixApi {
       hostname: '0.0.0.0'
     }, ({ hostname, port }) => {
       // Server status messages
-      console.log('\n📡 Server Status:');
+      console.log('\n[*] Server Status:');
       console.log('-------------------');
-      console.log(`⚡ Mode: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 Host: ${hostname === '0.0.0.0' ? 'All Interfaces (0.0.0.0)' : hostname}`);
-      console.log(`🚪 Port: ${port}`);
-      console.log('\n📍 Access Points:');
+      console.log(`[>] Mode: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`[>] Host: ${hostname === '0.0.0.0' ? 'All Interfaces (0.0.0.0)' : hostname}`);
+      console.log(`[>] Port: ${port}`);
+      console.log('\n[*] Access Points:');
       console.log('-------------------');
-      console.log(`🏠 Homepage: http://localhost:${port}`);
-      console.log(`📚 Swagger UI: http://localhost:${port}/swagger`);
-      console.log(`🔌 API Base: http://localhost:${port}/api/v1`);
-      console.log('\n✨ Server is ready to accept connections\n');
+      console.log(`[+] Homepage: http://localhost:${port}`);
+      console.log(`[+] Swagger UI: http://localhost:${port}/swagger`);
+      console.log(`[+] API Base: http://localhost:${port}/api/v1`);
+      console.log('\n[!] Server is ready to accept connections\n');
     });
   }
 } 
