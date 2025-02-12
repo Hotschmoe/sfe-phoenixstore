@@ -22,26 +22,58 @@ export class PhoenixStore {
     class Query {
       private conditions: QueryCondition[] = [];
       private queryOptions: QueryOptions = {};
+      private hasOrderBy = false;
+
+      constructor(private readonly collectionName: string) {}
+
+      private clone(): Query {
+        const newQuery = new Query(this.collectionName);
+        newQuery.conditions = [...this.conditions];
+        newQuery.queryOptions = { ...this.queryOptions };
+        newQuery.hasOrderBy = this.hasOrderBy;
+        return newQuery;
+      }
 
       where(field: string, operator: QueryOperator, value: any): Query {
-        this.conditions.push({ field, operator, value });
-        return this;
+        if (this.hasOrderBy) {
+          throw new PhoenixStoreError(
+            'where must come before orderBy',
+            'INVALID_QUERY'
+          );
+        }
+
+        if (operator === '>' || operator === '<' || operator === '>=' || operator === '<=') {
+          if (typeof value !== 'number' && !(value instanceof Date)) {
+            throw new PhoenixStoreError(
+              `Value must be a number or Date for operator ${operator}`,
+              'INVALID_ARGUMENT'
+            );
+          }
+        }
+
+        const newQuery = this.clone();
+        newQuery.conditions.push({ field, operator, value });
+        return newQuery;
       }
 
       orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): Query {
-        this.queryOptions.orderBy = field;
-        this.queryOptions.orderDirection = direction;
-        return this;
+        const newQuery = this.clone();
+        newQuery.queryOptions.orderBy = field;
+        newQuery.queryOptions.orderDirection = direction;
+        newQuery.hasOrderBy = true;
+        return newQuery;
       }
 
       limit(limit: number): Query {
-        this.queryOptions.limit = limit;
-        return this;
+        const newQuery = this.clone();
+        newQuery.queryOptions.limit = limit;
+        return newQuery;
       }
 
       offset(offset: number): Query {
-        this.queryOptions.offset = offset;
-        return this;
+        const newQuery = this.clone();
+        newQuery.queryOptions.offset = offset;
+        return newQuery;
       }
 
       async get(): Promise<T[]> {
@@ -79,17 +111,17 @@ export class PhoenixStore {
       },
 
       where(field: string, operator: QueryOperator, value: any): Query {
-        const query = new Query();
+        const query = new Query(name);
         return query.where(field, operator, value);
       },
 
       orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): Query {
-        const query = new Query();
+        const query = new Query(name);
         return query.orderBy(field, direction);
       },
 
       limit(limit: number): Query {
-        const query = new Query();
+        const query = new Query(name);
         return query.limit(limit);
       }
     };

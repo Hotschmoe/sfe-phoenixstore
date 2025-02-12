@@ -147,4 +147,91 @@ describe("MongoAdapter Query Operations", () => {
       expect(results).toHaveLength(5); // Should still return results
     });
   });
+
+  describe("Edge Cases", () => {
+    let testCollection: string;
+    
+    beforeEach(async () => {
+      // Create a new collection for each test
+      testCollection = `test_collection_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    });
+
+    test("should handle null values in queries", async () => {
+      await adapter.add(testCollection, { name: "Test", age: null });
+      const results = await adapter.query(testCollection, [
+        { field: "age", operator: "==", value: null }
+      ]);
+      expect(results).toHaveLength(1);
+      expect(results[0].age).toBeNull();
+    });
+
+    test("should handle undefined fields", async () => {
+      // Add two documents: one with null age, one without age field
+      await adapter.add(testCollection, { name: "Test1", age: null });
+      await adapter.add(testCollection, { name: "Test2" }); // no age field
+      
+      const results = await adapter.query(testCollection, [
+        { field: "age", operator: "==", value: null }
+      ]);
+      
+      // MongoDB treats both null values and missing fields as matching null equality
+      expect(results).toHaveLength(2);
+      results.forEach(doc => {
+        expect(doc.age).toBeFalsy(); // Could be null or undefined
+      });
+    });
+
+    test("should handle empty result sets", async () => {
+      const results = await adapter.query(testCollection, [
+        { field: "age", operator: "==", value: 999 }
+      ]);
+      expect(results).toHaveLength(0);
+    });
+
+    test("should handle invalid field names", async () => {
+      try {
+        await adapter.query(testCollection, [
+          { field: "$invalid", operator: "==", value: "test" }
+        ]);
+        throw new Error("Should not reach here");
+      } catch (error: any) {
+        // MongoDB returns a general query error for invalid field names
+        expect(error.code).toBe("QUERY_ERROR");
+      }
+    });
+  });
+
+  describe("Performance Cases", () => {
+    test("should handle large result sets efficiently", async () => {
+      // Insert 1000 documents
+      const promises = Array.from({ length: 1000 }, (_, i) => 
+        adapter.add(collection, { 
+          name: `Test ${i}`, 
+          age: Math.floor(Math.random() * 100) 
+        })
+      );
+      await Promise.all(promises);
+
+      const startTime = Date.now();
+      const results = await adapter.query(collection, [
+        { field: "age", operator: ">", value: 50 }
+      ], { limit: 100 });
+      const endTime = Date.now();
+
+      expect(results.length).toBeLessThanOrEqual(100);
+      expect(endTime - startTime).toBeLessThan(100); // Should complete in under 100ms
+    });
+
+    test("should handle concurrent queries", async () => {
+      const queries = Array.from({ length: 10 }, () => 
+        adapter.query(collection, [
+          { field: "age", operator: ">", value: 25 }
+        ])
+      );
+      const results = await Promise.all(queries);
+      results.forEach(result => {
+        expect(Array.isArray(result)).toBe(true);
+      });
+    });
+  });
 }); 

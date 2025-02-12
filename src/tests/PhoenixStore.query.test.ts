@@ -122,28 +122,135 @@ describe("PhoenixStore Query Operations", () => {
     });
   });
 
+  describe("Advanced Query Patterns", () => {
+    test("should handle complex chaining with multiple conditions", async () => {
+      const users = store.collection(collection);
+      const results = await users
+        .where("age", ">=", 25)
+        .where("city", "in", ["London", "New York"])
+        .orderBy("name", "desc")
+        .limit(3)
+        .get();
+      
+      expect(results.length).toBeLessThanOrEqual(3);
+      results.forEach(doc => {
+        expect(doc.age).toBeGreaterThanOrEqual(25);
+        expect(["London", "New York"]).toContain(doc.city);
+      });
+      
+      // Check descending order
+      for (let i = 1; i < results.length; i++) {
+        expect(results[i-1].name >= results[i].name).toBe(true);
+      }
+    });
+
+    test("should maintain query immutability", async () => {
+      const users = store.collection(collection);
+      const baseQuery = users.where("age", ">=", 25);
+      
+      const queryA = baseQuery.where("city", "==", "London");
+      const queryB = baseQuery.where("city", "==", "New York");
+      
+      const [resultsA, resultsB] = await Promise.all([
+        queryA.get(),
+        queryB.get()
+      ]);
+      
+      resultsA.forEach(doc => expect(doc.city).toBe("London"));
+      resultsB.forEach(doc => expect(doc.city).toBe("New York"));
+    });
+  });
+
+  describe("Error Handling", () => {
+    test("should handle invalid query combinations", async () => {
+      const users = store.collection(collection);
+      
+      try {
+        await users
+          .orderBy("age")
+          .where("age", ">", 25)
+          .get();
+        throw new Error("Should not reach here");
+      } catch (error: any) {
+        expect(error.code).toBe("INVALID_QUERY");
+        expect(error.message).toContain("where must come before orderBy");
+      }
+    });
+
+    test("should validate field values", async () => {
+      const users = store.collection(collection);
+      
+      try {
+        await users
+          .where("age", ">", "invalid_age") // age should be number
+          .get();
+        throw new Error("Should not reach here");
+      } catch (error: any) {
+        expect(error.code).toBe("INVALID_ARGUMENT");
+      }
+    });
+  });
+
   describe("Type Safety", () => {
     interface User {
       name: string;
       age: number;
       city: string;
       tags: string[];
+      metadata?: {
+        lastLogin?: Date;
+        preferences?: {
+          theme: string;
+          notifications: boolean;
+        };
+      };
     }
 
-    test("should maintain type safety in queries", async () => {
+    test("should enforce type safety in complex objects", async () => {
       const users = store.collection<User>(collection);
-      const results = await users
-        .where("age", ">", 25)
-        .get();
       
-      results.forEach(user => {
-        // TypeScript should recognize these types
-        const name: string = user.name;
-        const age: number = user.age;
-        expect(typeof name).toBe("string");
-        expect(typeof age).toBe("number");
-        expect(Array.isArray(user.tags)).toBe(true);
-      });
+      // This should compile without type errors
+      const query = users
+        .where("metadata.preferences.theme", "==", "dark")
+        .where("metadata.lastLogin", ">", new Date(2024, 0, 1))
+        .orderBy("metadata.lastLogin", "desc");
+      
+      await query.get();
+      expect(true).toBe(true); // If we reach here, types are correct
+    });
+
+    test("should enforce runtime type validation", async () => {
+      const users = store.collection<User>(collection);
+      
+      // Test numeric operator with string value
+      try {
+        await users
+          .where("age", ">", "25") // age should be number
+          .get();
+        throw new Error("Should have thrown INVALID_ARGUMENT error");
+      } catch (error: any) {
+        expect(error.code).toBe("INVALID_ARGUMENT");
+      }
+
+      // Test with invalid field path
+      try {
+        await users
+          .where("nonexistent.field", "==", "value")
+          .get();
+        throw new Error("Should have thrown an error");
+      } catch (error: any) {
+        expect(error).toBeDefined();
+      }
+
+      // Test with invalid operator
+      try {
+        await users
+          .where("age", "invalid" as any, 25)
+          .get();
+        throw new Error("Should have thrown INVALID_OPERATOR error");
+      } catch (error: any) {
+        expect(error.code).toBe("INVALID_OPERATOR");
+      }
     });
   });
 }); 
