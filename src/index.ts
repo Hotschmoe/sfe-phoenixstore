@@ -1,5 +1,6 @@
 import { config } from './utils/config';
 import { PhoenixStore } from './core/PhoenixStore';
+import { PhoenixApi } from './api/PhoenixApi';
 export * from './types';
 
 // Create and export the default instance
@@ -14,12 +15,10 @@ export default defaultStore;
 
 // Start the server if this file is run directly
 if (import.meta.url === import.meta.main) {
-  const server = Bun.serve({
-    port: config.PORT,
-    fetch(req) {
-      return new Response("PhoenixStore is running!");
-    },
-  });
-
-  console.log(`🚀 Server running at http://localhost:${server.port}`);
+  // Initialize store and connect to MongoDB
+  await defaultStore.connect();
+  
+  // Create and start API server
+  const api = new PhoenixApi(defaultStore);
+  api.start(config.PORT);
 } 
