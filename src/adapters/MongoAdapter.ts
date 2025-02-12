@@ -1,4 +1,4 @@
-import { MongoClient, Collection, Db } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 
 export class MongoAdapter {
@@ -69,7 +69,18 @@ export class MongoAdapter {
     id: string
   ): Promise<T | null> {
     const collection = this.getCollection<T>(collectionName);
-    return collection.findOne({ _id: id });
+    try {
+      const objectId = new ObjectId(id);
+      const doc = await collection.findOne({ _id: objectId });
+      if (!doc) return null;
+      
+      // Convert MongoDB _id to string id in the returned document
+      const { _id, ...rest } = doc;
+      return { id: _id.toString(), ...rest } as T;
+    } catch (error) {
+      // If ID is invalid format, return null
+      return null;
+    }
   }
 
   async update<T extends DocumentData>(
@@ -78,16 +89,26 @@ export class MongoAdapter {
     data: Partial<T>
   ): Promise<boolean> {
     const collection = this.getCollection<T>(collectionName);
-    const result = await collection.updateOne(
-      { _id: id },
-      { $set: data }
-    );
-    return result.modifiedCount > 0;
+    try {
+      const objectId = new ObjectId(id);
+      const result = await collection.updateOne(
+        { _id: objectId },
+        { $set: data }
+      );
+      return result.modifiedCount > 0;
+    } catch (error) {
+      return false;
+    }
   }
 
   async delete(collectionName: string, id: string): Promise<boolean> {
     const collection = this.getCollection(collectionName);
-    const result = await collection.deleteOne({ _id: id });
-    return result.deletedCount > 0;
+    try {
+      const objectId = new ObjectId(id);
+      const result = await collection.deleteOne({ _id: objectId });
+      return result.deletedCount > 0;
+    } catch (error) {
+      return false;
+    }
   }
 }

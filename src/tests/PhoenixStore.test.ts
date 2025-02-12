@@ -16,6 +16,7 @@ describe("PhoenixStore", () => {
   });
 
   describe("Collection Operations", () => {
+    const getTestCollection = () => `test_collection_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const testData = {
       name: "Test User",
       email: "test@example.com",
@@ -23,14 +24,16 @@ describe("PhoenixStore", () => {
     };
 
     test("should add a document to collection", async () => {
-      const users = store.collection("users");
+      const collection = getTestCollection();
+      const users = store.collection(collection);
       const id = await users.add(testData);
       expect(id).toBeDefined();
       expect(typeof id).toBe("string");
     });
 
     test("should retrieve a document from collection", async () => {
-      const users = store.collection("users");
+      const collection = getTestCollection();
+      const users = store.collection(collection);
       const id = await users.add(testData);
       const doc = await users.doc(id).get();
       
@@ -43,7 +46,8 @@ describe("PhoenixStore", () => {
     });
 
     test("should update a document in collection", async () => {
-      const users = store.collection("users");
+      const collection = getTestCollection();
+      const users = store.collection(collection);
       const id = await users.add(testData);
       
       const updateData = { name: "Updated Name", age: 26 };
@@ -57,7 +61,8 @@ describe("PhoenixStore", () => {
     });
 
     test("should delete a document from collection", async () => {
-      const users = store.collection("users");
+      const collection = getTestCollection();
+      const users = store.collection(collection);
       const id = await users.add(testData);
       
       await users.doc(id).delete();
@@ -73,7 +78,8 @@ describe("PhoenixStore", () => {
         age: number;
       }
 
-      const users = store.collection<User>("users");
+      const collection = getTestCollection();
+      const users = store.collection<User>(collection);
       const id = await users.add(testData);
       const doc = await users.doc(id).get();
       const data = doc.data();

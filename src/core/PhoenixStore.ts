@@ -17,30 +17,35 @@ export class PhoenixStore {
   }
 
   collection<T extends DocumentData = DocumentData>(name: string) {
+    const adapter = this.adapter;
+
+    class DocumentReference {
+      constructor(private id: string) {}
+
+      async get(): Promise<{ id: string; data: () => T | null }> {
+        const doc = await adapter.get<T>(name, this.id);
+        return {
+          id: this.id,
+          data: () => doc
+        };
+      }
+
+      async update(data: Partial<T>): Promise<void> {
+        await adapter.update<T>(name, this.id, data);
+      }
+
+      async delete(): Promise<void> {
+        await adapter.delete(name, this.id);
+      }
+    }
+
     return {
-      // Basic CRUD operations with Firestore-like syntax
       async add(data: T): Promise<string> {
-        return this.adapter.add<T>(name, data);
+        return adapter.add<T>(name, data);
       },
 
-      async doc(id: string) {
-        return {
-          async get(): Promise<{ id: string; data: () => T | null }> {
-            const doc = await this.adapter.get<T>(name, id);
-            return {
-              id,
-              data: () => doc
-            };
-          },
-
-          async update(data: Partial<T>): Promise<void> {
-            await this.adapter.update<T>(name, id, data);
-          },
-
-          async delete(): Promise<void> {
-            await this.adapter.delete(name, id);
-          }
-        };
+      doc(id: string): DocumentReference {
+        return new DocumentReference(id);
       }
     };
   }
