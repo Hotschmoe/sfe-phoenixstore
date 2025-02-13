@@ -1,4 +1,4 @@
-import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document, OptionalUnlessRequiredId } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 
 export class MongoAdapter {
@@ -88,7 +88,7 @@ export class MongoAdapter {
       const sort = this.buildSort(options.orderBy, options.orderDirection);
       
       // Create query
-      let query = collection.find(filter);
+      let query = collection.find(filter as Filter<T>);
       
       // Apply sorting
       if (sort) {
@@ -109,7 +109,7 @@ export class MongoAdapter {
       // Transform results to include string IDs
       return results.map(doc => {
         const { _id, ...rest } = doc;
-        return { id: _id.toString(), ...rest } as T;
+        return { id: _id.toString(), ...rest } as unknown as T;
       });
     } catch (error) {
       if (error instanceof PhoenixStoreError) {
@@ -185,7 +185,7 @@ export class MongoAdapter {
     data: T
   ): Promise<string> {
     const collection = this.getCollection<T>(collectionName);
-    const result = await collection.insertOne(data);
+    const result = await collection.insertOne(data as OptionalUnlessRequiredId<T>);
     return result.insertedId.toString();
   }
 
@@ -196,12 +196,12 @@ export class MongoAdapter {
     const collection = this.getCollection<T>(collectionName);
     try {
       const objectId = new ObjectId(id);
-      const doc = await collection.findOne({ _id: objectId });
+      const doc = await collection.findOne({ _id: objectId } as Filter<T>);
       if (!doc) return null;
       
       // Convert MongoDB _id to string id in the returned document
       const { _id, ...rest } = doc;
-      return { id: _id.toString(), ...rest } as T;
+      return { id: _id.toString(), ...rest } as unknown as T;
     } catch (error) {
       // If ID is invalid format, return null
       return null;
@@ -217,7 +217,7 @@ export class MongoAdapter {
     try {
       const objectId = new ObjectId(id);
       const result = await collection.updateOne(
-        { _id: objectId },
+        { _id: objectId } as Filter<T>,
         { $set: data }
       );
       return result.modifiedCount > 0;
