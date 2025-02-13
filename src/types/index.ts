@@ -1,3 +1,5 @@
+import { Document } from 'mongodb';
+
 // Query Types
 export type QueryOperator = 
   | '==' 
@@ -7,7 +9,9 @@ export type QueryOperator =
   | '>' 
   | '>=' 
   | 'in' 
-  | 'not-in';
+  | 'not-in'
+  | 'array-contains'
+  | 'array-contains-any';
 
 export type OrderDirection = 'asc' | 'desc';
 
@@ -19,7 +23,7 @@ export interface QueryOptions {
 }
 
 // Document Types
-export interface DocumentData {
+export interface DocumentData extends Document {
   id?: string;
   [field: string]: any;
 }

@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { swagger } from '@elysiajs/swagger';
 import { PhoenixStore } from '../core/PhoenixStore';
-import { DocumentData, PhoenixStoreError } from '../types';
+import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
 
 /**
@@ -35,6 +35,89 @@ export class PhoenixApi {
     this.setupRoutes();
   }
 
+  private parseQueryParams(query: any) {
+    const conditions = [];
+    const options: { orderBy?: string; orderDirection?: 'asc' | 'desc'; limit?: number; offset?: number } = {};
+
+    // Parse where conditions (field:operator:value)
+    if (query.where) {
+      const whereConditions = Array.isArray(query.where) ? query.where : [query.where];
+      for (const condition of whereConditions) {
+        const [field, operator, value] = condition.split(':');
+        if (!field || !operator || value === undefined) {
+          throw new PhoenixStoreError(
+            'Invalid where condition format. Expected field:operator:value',
+            'INVALID_QUERY_PARAMS'
+          );
+        }
+        
+        // Validate operator
+        if (!['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in'].includes(operator)) {
+          throw new PhoenixStoreError(
+            `Invalid operator: ${operator}`,
+            'INVALID_QUERY_PARAMS'
+          );
+        }
+
+        // Parse value based on type
+        let parsedValue = value;
+        if (value.startsWith('[') && value.endsWith(']')) {
+          // Parse array values for 'in' and 'not-in' operators
+          try {
+            parsedValue = JSON.parse(value);
+          } catch {
+            throw new PhoenixStoreError(
+              'Invalid array format in where condition',
+              'INVALID_QUERY_PARAMS'
+            );
+          }
+        } else if (value === 'true' || value === 'false') {
+          parsedValue = value === 'true';
+        } else if (!isNaN(Number(value))) {
+          parsedValue = Number(value);
+        }
+
+        conditions.push({
+          field,
+          operator: operator as QueryOperator,
+          value: parsedValue
+        });
+      }
+    }
+
+    // Parse orderBy
+    if (query.orderBy) {
+      const [field, direction] = query.orderBy.split(':');
+      options.orderBy = field;
+      options.orderDirection = (direction?.toLowerCase() || 'asc') as 'asc' | 'desc';
+    }
+
+    // Parse pagination
+    if (query.limit) {
+      const limit = parseInt(query.limit);
+      if (isNaN(limit) || limit < 1) {
+        throw new PhoenixStoreError(
+          'Invalid limit parameter',
+          'INVALID_QUERY_PARAMS'
+        );
+      }
+      options.limit = limit;
+    }
+
+    if (query.offset) {
+      const offset = parseInt(query.offset);
+      if (isNaN(offset) || offset < 0) {
+        throw new PhoenixStoreError(
+          'Invalid offset parameter',
+          'INVALID_QUERY_PARAMS'
+        );
+      }
+      options.offset = offset;
+    }
+
+    return { conditions, options };
+  }
+
   private setupRoutes() {
     // Root endpoint with API information
     this.app.get('/', () => {
@@ -43,6 +126,22 @@ export class PhoenixApi {
           'Content-Type': 'text/html'
         }
       });
+    });
+
+    // Query collection
+    this.app.get('/api/v1/:collection', async ({ params, query }) => {
+      try {
+        const collection = this.store.collection(params.collection);
+        const { conditions, options } = this.parseQueryParams(query);
+        
+        const results = await collection.query(conditions, options);
+        return {
+          status: 'success',
+          data: results
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
     });
 
     // Create document

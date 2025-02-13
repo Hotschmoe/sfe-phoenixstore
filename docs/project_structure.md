@@ -3,21 +3,22 @@
 ```
 sfe-phoenixstore/
 ├── docs/
+│   ├── api.md              # API documentation with query operations
 │   └── project_structure.md
 ├── src/
 │   ├── adapters/
-│   │   └── MongoAdapter.ts
+│   │   └── MongoAdapter.ts # MongoDB adapter with query operations
 │   ├── api/
-│   │   └── PhoenixApi.ts
+│   │   └── PhoenixApi.ts   # REST API with query endpoints
 │   ├── core/
 │   │   └── PhoenixStore.ts
 │   ├── tests/
-│   │   ├── MongoAdapter.query.test.ts
-│   │   ├── MongoAdapter.test.ts
+│   │   ├── MongoAdapter.query.test.ts  # Query operation tests
+│   │   ├── MongoAdapter.test.ts        # Basic CRUD tests
 │   │   ├── PhoenixStore.test.ts
 │   │   └── setup.ts
 │   ├── types/
-│   │   └── index.ts
+│   │   └── index.ts        # Query types and operators
 │   ├── utils/
 │   │   └── config.ts
 │   └── index.ts
@@ -33,7 +34,6 @@ sfe-phoenixstore/
 ├── package.json
 └── tsconfig.json
 ```
-
 ## Docker Container Structure
 
 ### Current Container Setup
@@ -75,3 +75,4 @@ Key Points:
 - The entire project directory is mounted to `/app` in the container
 - Node modules are kept in an anonymous volume to prevent host node_modules from overriding container modules
 - MongoDB data is persisted in a named volume
+

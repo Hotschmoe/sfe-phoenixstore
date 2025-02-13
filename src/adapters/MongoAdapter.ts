@@ -1,4 +1,4 @@
-import { MongoClient, Collection, Db, ObjectId, Filter, Sort } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 
 export class MongoAdapter {
@@ -45,7 +45,7 @@ export class MongoAdapter {
     await this.client.close();
   }
 
-  private getCollection<T = DocumentData>(collectionName: string): Collection<T> {
+  private getCollection<T extends Document>(collectionName: string): Collection<T> {
     if (!this.db) {
       throw new PhoenixStoreError(
         'Database connection not initialized',
@@ -73,7 +73,7 @@ export class MongoAdapter {
   }
 
   // Query builder method
-  async query<T extends DocumentData>(
+  async query<T extends Document>(
     collectionName: string,
     conditions: { field: string; operator: QueryOperator; value: any }[],
     options: QueryOptions = {}
@@ -113,7 +113,7 @@ export class MongoAdapter {
       });
     } catch (error) {
       if (error instanceof PhoenixStoreError) {
-        throw error; // Re-throw PhoenixStoreError with original code
+        throw error;
       }
       throw new PhoenixStoreError(
         'Failed to execute query',
@@ -123,7 +123,7 @@ export class MongoAdapter {
     }
   }
 
-  private buildFilter(conditions: { field: string; operator: QueryOperator; value: any }[]): Filter<any> {
+  private buildFilter(conditions: { field: string; operator: QueryOperator; value: any }[]): Filter<Document> {
     const filter: Record<string, any> = {};
     
     for (const { field, operator, value } of conditions) {
@@ -151,6 +151,14 @@ export class MongoAdapter {
           break;
         case 'not-in':
           filter[field] = { $nin: value };
+          break;
+        case 'array-contains':
+          // Use $elemMatch for single value array containment
+          filter[field] = { $elemMatch: { $eq: value } };
+          break;
+        case 'array-contains-any':
+          // Use $in for checking if array contains any of the values
+          filter[field] = { $in: value };
           break;
         default:
           throw new PhoenixStoreError(

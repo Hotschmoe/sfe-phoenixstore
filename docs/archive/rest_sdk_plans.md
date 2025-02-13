@@ -33,12 +33,12 @@ We're implementing both a REST API and SDK approach because:
 ## Development Plan
 
 ### Phase 1: REST API Development (2-3 weeks)
-1. **Setup Elysia Framework (Day 1-2)**
+1. **Setup Elysia Framework (Day 1-2)** ✅
    - Install and configure Elysia
    - Set up project structure
    - Configure TypeScript
 
-2. **Core REST Endpoints (Week 1)**
+2. **Core REST Endpoints (Week 1)** ✅
    - Implement CRUD operations
    - Document endpoints
    - Add request validation
@@ -50,16 +50,20 @@ We're implementing both a REST API and SDK approach because:
    DELETE /api/v1/{collection}/{id}     # Delete document
    ```
 
-3. **Query Operations (Week 2)**
-   - Implement where clauses
-   - Add orderBy functionality
+3. **Query Operations (Week 2)** ✅
+   - Implement where clauses with operators:
+     - Basic operators: ==, !=, >, >=, <, <=
+     - Array operators: array-contains, array-contains-any
+     - Collection operators: in, not-in
+   - Add orderBy functionality (asc/desc)
    - Add limit/offset pagination
    - Add collection queries
+   - Comprehensive test coverage
    ```
    GET /api/v1/{collection}?where=field:op:value&orderBy=field:direction&limit=10
    ```
 
-4. **Authentication (Week 2-3)**
+4. **Authentication (Week 2-3)** 🚧
    - Implement basic auth system
    - Add JWT support
    - Add middleware for auth checks
