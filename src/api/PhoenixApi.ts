@@ -1,9 +1,9 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
-import { swagger } from '@elysiajs/swagger';
 import { PhoenixStore } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
+import { swaggerPlugin } from './PhoenixSwagger';
 
 /**
  * PhoenixApi provides a REST API interface for PhoenixStore
@@ -23,14 +23,7 @@ export class PhoenixApi {
     this.store = store;
     this.app = new Elysia()
       .use(cors())
-      .use(swagger({
-        documentation: {
-          info: {
-            title: 'PhoenixStore API',
-            version: '1.0.0'
-          }
-        }
-      }));
+      .use(swaggerPlugin);
 
     this.setupRoutes();
   }
