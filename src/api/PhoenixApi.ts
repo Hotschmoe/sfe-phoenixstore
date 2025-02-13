@@ -127,7 +127,29 @@ export class PhoenixApi {
         const collection = this.store.collection(params.collection);
         const { conditions, options } = this.parseQueryParams(query);
         
-        const results = await collection.query(conditions, options);
+        // Start with first condition or orderBy to get Query object
+        let queryBuilder = conditions.length > 0
+          ? collection.where(conditions[0].field, conditions[0].operator, conditions[0].value)
+          : collection.orderBy(options.orderBy || 'id', options.orderDirection);
+
+        // Add remaining conditions
+        for (let i = 1; i < conditions.length; i++) {
+          const condition = conditions[i];
+          queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
+        }
+        
+        // Add remaining options
+        if (options.orderBy && conditions.length > 0) {
+          queryBuilder = queryBuilder.orderBy(options.orderBy, options.orderDirection);
+        }
+        if (options.limit) {
+          queryBuilder = queryBuilder.limit(options.limit);
+        }
+        if (options.offset) {
+          queryBuilder = queryBuilder.offset(options.offset);
+        }
+        
+        const results = await queryBuilder.get();
         return {
           status: 'success',
           data: results
