@@ -12,7 +12,7 @@ interface Config {
   MONGODB_PORT: string;
   API_URL: string;
   PORT: number;
-  NODE_ENV: string;
+  // NODE_ENV: string; // this should be set by Dockerfile
 }
 
 // Development defaults - DO NOT use in production
@@ -23,7 +23,7 @@ const devDefaults = {
   MONGODB_USER: 'phoenixuser',
   MONGODB_PASSWORD: 'phoenixpass',
   PORT: '3000',
-  NODE_ENV: 'development',
+  // NODE_ENV: 'development', this should be set by Dockerfile
   API_URL: 'http://localhost:3000'
 } as const;
 
@@ -68,5 +68,5 @@ export const config: Config = {
   ),
   API_URL: process.env.PHOENIXSTORE_API_URL ? `${process.env.PHOENIXSTORE_API_URL}:${process.env.PHOENIXSTORE_PORT}` : devDefaults.API_URL,
   PORT: parseInt(process.env.PHOENIXSTORE_PORT || devDefaults.PORT, 10),
-  NODE_ENV: process.env.PHOENIXSTORE_ENV || devDefaults.NODE_ENV,
+  // NODE_ENV: process.env.PHOENIXSTORE_ENV || devDefaults.NODE_ENV, // this should be set by Dockerfile
 };

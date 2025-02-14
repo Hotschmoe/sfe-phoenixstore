@@ -1,3 +1,10 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { version } = require('../../package.json');
+
+// Get NODE_ENV from Dockerfile environment
+const nodeEnv = process.env.NODE_ENV || 'development';
+
 export const homeHtml = `<!DOCTYPE html>
 <html>
   <head>
@@ -46,6 +53,28 @@ export const homeHtml = `<!DOCTYPE html>
         margin: 1rem 0;
         color: #2563eb;
       }
+      .version {
+        margin-top: 2rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+        font-family: monospace;
+      }
+      .env-tag {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        margin-left: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: bold;
+      }
+      .env-development {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .env-production {
+        background: #fee2e2;
+        color: #991b1b;
+      }
     </style>
   </head>
   <body>
@@ -74,7 +103,7 @@ export const homeHtml = `<!DOCTYPE html>
       </div>
 
       <div class="version">
-        <p>Version: 0.1.0</p>
+        <p>Version: ${version}<span class="env-tag env-${nodeEnv}">${nodeEnv.toUpperCase()}</span></p>
       </div>
     </div>
   </body>

@@ -253,6 +253,54 @@ open http://localhost:8081
 
 ## Release Process
 
+### Version Numbering
+
+PhoenixStore uses semantic versioning with a focus on Firestore SDK compatibility:
+
+```
+x.y.z format where:
+
+x (major) - Firestore SDK Compatibility
+- Increment when breaking Firestore SDK compatibility
+- Projects using Firestore SDK vX should work with PhoenixStore vX
+- Major architectural changes also increment this
+
+y (minor) - Feature Updates
+- New features that maintain compatibility
+- Significant improvements
+- Non-breaking API changes
+
+z (patch) - Bug Fixes
+- Bug fixes
+- Performance improvements
+- Documentation updates
+```
+
+Examples:
+- `1.0.0`: Initial release, compatible with Firestore SDK v1
+- `1.1.0`: Added new features, still compatible with Firestore SDK v1
+- `1.1.1`: Bug fixes for v1.1.0
+- `2.0.0`: Breaking changes, now compatible with Firestore SDK v2
+
+### Version Update Guidelines
+
+1. **Major Version (x)**
+   - Requires extensive testing with target Firestore SDK version
+   - Must include migration guide in documentation
+   - Requires sign-off from core maintainers
+
+2. **Minor Version (y)**
+   - Feature additions must be backward compatible
+   - Update API documentation
+   - Include examples for new features
+
+3. **Patch Version (z)**
+   - No breaking changes
+   - Must include test cases for fixed bugs
+   - Update changelog with fix details
+
+### Release Steps
+
 1. **Preparation**
    - Update version number
    - Update CHANGELOG.md
@@ -260,15 +308,17 @@ open http://localhost:8081
 
 2. **Release Steps**
    ```bash
-   # Update version
-   bun version patch # or minor/major
+   # Update version based on changes
+   bun version major  # For x.0.0
+   bun version minor  # For 0.y.0
+   bun version patch  # For 0.0.z
    
    # Build
    bun run build
    
    # Create release
-   git tag v1.0.0
-   git push origin v1.0.0
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
 
 ## Getting Help

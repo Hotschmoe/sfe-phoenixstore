@@ -2,7 +2,7 @@ services:
   phoenixstore:
     build:
       context: .
-      target: development
+      target: ${PHOENIXSTORE_ENV}
     ports:
       - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"
     environment:
@@ -12,7 +12,6 @@ services:
       - MONGODB_USER=${MONGODB_USER}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
       - PORT=${PHOENIXSTORE_PORT}
-      - NODE_ENV=${PHOENIXSTORE_ENV}
       - API_URL=${PHOENIXSTORE_API_URL}:${PHOENIXSTORE_PORT}
     env_file:
       - .env

@@ -36,6 +36,22 @@ yarn add phoenixstore
 docker compose down; docker compose build --no-cache; docker compose up -d
 ```
 
+## Versioning
+
+PhoenixStore follows semantic versioning with Firestore compatibility in mind:
+
+```
+x.y.z where:
+x: Major version (matches compatible Firestore SDK version)
+y: Feature updates and significant changes
+z: Bug fixes and minor improvements
+```
+
+For example, version `1.2.3` means:
+- Compatible with Firestore SDK v1.x.x
+- Second feature release
+- Third patch/fix release
+
 ### 2. Basic Usage
 
 ```typescript
