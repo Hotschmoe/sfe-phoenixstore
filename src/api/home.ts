@@ -70,7 +70,7 @@ export const homeHtml = `<!DOCTYPE html>
       <div class="links">
         <h2>[->] Useful Links</h2>
         <p><a href="/swagger">API Documentation (Swagger)</a></p>
-        <p><a href="https://github.com/yourusername/phoenixstore">GitHub Repository</a></p>
+        <p><a href="https://github.com/Hotschmoe/sfe-phoenixstore">GitHub Repository</a></p>
       </div>
 
       <div class="version">
