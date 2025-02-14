@@ -4,16 +4,16 @@ services:
       context: .
       target: development
     ports:
-      - "${PORT}:${PORT}"
+      - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"
     environment:
-      - MONGODB_HOST=mongodb
-      - MONGODB_PORT=27017
+      - MONGODB_HOST=${MONGODB_HOST}
+      - MONGODB_PORT=${MONGODB_PORT}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
       - MONGODB_USER=${MONGODB_USER}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
-      - PORT=${PORT}
-      - NODE_ENV=${NODE_ENV}
-      - API_URL=${API_URL}
+      - PORT=${PHOENIXSTORE_PORT}
+      - NODE_ENV=${PHOENIXSTORE_ENV}
+      - API_URL=${PHOENIXSTORE_API_URL}:${PHOENIXSTORE_PORT}
     env_file:
       - .env
     depends_on:
