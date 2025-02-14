@@ -341,3 +341,8 @@ export const createUser = onUserCreated(async (user, context) => {
 The Functions Directory Within Main Repo approach provides the best balance of developer experience, maintainability, and functionality for the PhoenixStore ecosystem. It allows for gradual implementation and feature addition while maintaining similarity with Firebase Functions for easier adoption.
 
 This approach can be evolved into a more distributed system in the future if needed, but starting with an integrated approach will allow faster development and easier maintenance in the early stages of the project.
+
+
+
+
+---> Can we add functions info automatically to swagger?
