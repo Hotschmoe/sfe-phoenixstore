@@ -158,11 +158,9 @@ curl -X DELETE http://localhost:3000/api/v1/users/123456
 
 ## Query Operations
 
-> 🚧 Query operations are planned for future implementation.
+The following query operations are available:
 
-The following query operations will be available:
-
-### Planned Query Parameters
+### Query Parameters
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
@@ -171,9 +169,37 @@ The following query operations will be available:
 | `limit` | Maximum number of results | `10` |
 | `offset` | Number of results to skip | `20` |
 
-Example future query:
+### Supported Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equals | `age:==:25` |
+| `!=` | Not equals | `city:!=:London` |
+| `>` | Greater than | `age:>:18` |
+| `>=` | Greater than or equal | `score:>=:90` |
+| `<` | Less than | `price:<:100` |
+| `<=` | Less than or equal | `quantity:<=:50` |
+| `in` | In array | `status:in:[active,pending]` |
+| `not-in` | Not in array | `category:not-in:[archived,deleted]` |
+| `array-contains` | Array contains value | `tags:array-contains:developer` |
+| `array-contains-any` | Array contains any value | `roles:array-contains-any:[admin,moderator]` |
+
+Example queries:
 ```http
-GET /users?where=age:>:21&orderBy=name:asc&limit=10
+# Basic query with single condition
+GET /api/v1/users?where=age:>:21
+
+# Multiple conditions
+GET /api/v1/users?where=age:>:21&where=city:==:London
+
+# Sorting and pagination
+GET /api/v1/users?orderBy=name:asc&limit=10&offset=20
+
+# Complex query with array operations
+GET /api/v1/users?where=tags:array-contains:developer&where=active:==:true
+
+# Combined query with sorting and filtering
+GET /api/v1/users?where=age:>=:25&where=score:>:80&orderBy=score:desc&limit=5
 ```
 
 ## Rate Limiting

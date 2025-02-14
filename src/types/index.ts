@@ -1,3 +1,5 @@
+import { Document } from 'mongodb';
+
 // Query Types
 export type QueryOperator = 
   | '==' 
@@ -6,23 +8,23 @@ export type QueryOperator =
   | '<=' 
   | '>' 
   | '>=' 
-  | 'array-contains' 
-  | 'array-contains-any' 
   | 'in' 
-  | 'not-in';
+  | 'not-in'
+  | 'array-contains'
+  | 'array-contains-any';
 
 export type OrderDirection = 'asc' | 'desc';
 
 export interface QueryOptions {
   limit?: number;
+  offset?: number;
   orderBy?: string;
   orderDirection?: OrderDirection;
-  startAfter?: any;
-  endBefore?: any;
 }
 
 // Document Types
-export interface DocumentData {
+export interface DocumentData extends Document {
+  id?: string;
   [field: string]: any;
 }
 
@@ -36,6 +38,13 @@ export interface DocumentSnapshot<T = DocumentData> {
 export interface CollectionReference<T = DocumentData> {
   id: string;
   path: string;
+}
+
+// Query Types
+export interface QueryCondition {
+  field: string;
+  operator: QueryOperator;
+  value: any;
 }
 
 // Error Types

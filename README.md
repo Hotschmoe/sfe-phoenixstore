@@ -17,7 +17,7 @@ A MongoDB-based Firestore alternative with familiar syntax for Flutter/Web proje
 
 ## Quick Start
 
-### 1. Installation
+### 1. Installation 
 
 ```bash
 # Using bun
@@ -28,6 +28,12 @@ npm install phoenixstore
 
 # Using yarn
 yarn add phoenixstore
+```
+
+1.a PowerShell Command for Docker Compose
+
+```powershell
+docker compose down; docker compose build --no-cache; docker compose up -d
 ```
 
 ### 2. Basic Usage

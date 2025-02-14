@@ -5,19 +5,17 @@ services:
       target: development
     ports:
       - "${PORT}:${PORT}"
-    volumes:
-      - .:/app
-      - /app/node_modules
     environment:
-      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_URI=mongodb://phoenixuser:phoenixpass@mongodb:27017/${MONGODB_DATABASE}?authSource=admin
       - MONGODB_DATABASE=${MONGODB_DATABASE}
       - PORT=${PORT}
-      - NODE_ENV=${NODE_ENV}
+      - NODE_ENV=development
     env_file:
       - .env
     depends_on:
-      - mongodb
-    command: bun run dev
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
 
   mongodb:
     image: mongo:latest
@@ -31,6 +29,12 @@ services:
       - .env
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   mongo-express:
     image: mongo-express
@@ -43,7 +47,8 @@ services:
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: admin123
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     restart: always
 
 volumes:

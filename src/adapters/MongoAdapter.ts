@@ -1,4 +1,4 @@
-import { MongoClient, Collection, Db, ObjectId } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document, OptionalUnlessRequiredId } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 
 export class MongoAdapter {
@@ -45,7 +45,7 @@ export class MongoAdapter {
     await this.client.close();
   }
 
-  private getCollection<T = DocumentData>(collectionName: string): Collection<T> {
+  private getCollection<T extends Document>(collectionName: string): Collection<T> {
     if (!this.db) {
       throw new PhoenixStoreError(
         'Database connection not initialized',
@@ -72,13 +72,120 @@ export class MongoAdapter {
     return operatorMap[operator];
   }
 
+  // Query builder method
+  async query<T extends Document>(
+    collectionName: string,
+    conditions: { field: string; operator: QueryOperator; value: any }[],
+    options: QueryOptions = {}
+  ): Promise<T[]> {
+    const collection = this.getCollection<T>(collectionName);
+    
+    try {
+      // Build MongoDB query from conditions
+      const filter = this.buildFilter(conditions);
+      
+      // Build sort options
+      const sort = this.buildSort(options.orderBy, options.orderDirection);
+      
+      // Create query
+      let query = collection.find(filter as Filter<T>);
+      
+      // Apply sorting
+      if (sort) {
+        query = query.sort(sort);
+      }
+      
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+      if (options.offset) {
+        query = query.skip(options.offset);
+      }
+      
+      // Execute query
+      const results = await query.toArray();
+      
+      // Transform results to include string IDs
+      return results.map(doc => {
+        const { _id, ...rest } = doc;
+        return { id: _id.toString(), ...rest } as unknown as T;
+      });
+    } catch (error) {
+      if (error instanceof PhoenixStoreError) {
+        throw error;
+      }
+      throw new PhoenixStoreError(
+        'Failed to execute query',
+        'QUERY_ERROR',
+        error as Error
+      );
+    }
+  }
+
+  private buildFilter(conditions: { field: string; operator: QueryOperator; value: any }[]): Filter<Document> {
+    const filter: Record<string, any> = {};
+    
+    for (const { field, operator, value } of conditions) {
+      switch (operator) {
+        case '==':
+          filter[field] = { $eq: value };
+          break;
+        case '!=':
+          filter[field] = { $ne: value };
+          break;
+        case '<':
+          filter[field] = { $lt: value };
+          break;
+        case '<=':
+          filter[field] = { $lte: value };
+          break;
+        case '>':
+          filter[field] = { $gt: value };
+          break;
+        case '>=':
+          filter[field] = { $gte: value };
+          break;
+        case 'in':
+          filter[field] = { $in: value };
+          break;
+        case 'not-in':
+          filter[field] = { $nin: value };
+          break;
+        case 'array-contains':
+          // Use $elemMatch for single value array containment
+          filter[field] = { $elemMatch: { $eq: value } };
+          break;
+        case 'array-contains-any':
+          // Use $in for checking if array contains any of the values
+          filter[field] = { $in: value };
+          break;
+        default:
+          throw new PhoenixStoreError(
+            `Unsupported operator: ${operator}`,
+            'INVALID_OPERATOR'
+          );
+      }
+    }
+    
+    return filter;
+  }
+
+  private buildSort(field?: string, direction: 'asc' | 'desc' = 'asc'): Sort | undefined {
+    if (!field) return undefined;
+    
+    return {
+      [field]: direction === 'asc' ? 1 : -1
+    };
+  }
+
   // Basic CRUD operations
   async add<T extends DocumentData>(
     collectionName: string,
     data: T
   ): Promise<string> {
     const collection = this.getCollection<T>(collectionName);
-    const result = await collection.insertOne(data);
+    const result = await collection.insertOne(data as OptionalUnlessRequiredId<T>);
     return result.insertedId.toString();
   }
 
@@ -89,12 +196,12 @@ export class MongoAdapter {
     const collection = this.getCollection<T>(collectionName);
     try {
       const objectId = new ObjectId(id);
-      const doc = await collection.findOne({ _id: objectId });
+      const doc = await collection.findOne({ _id: objectId } as Filter<T>);
       if (!doc) return null;
       
       // Convert MongoDB _id to string id in the returned document
       const { _id, ...rest } = doc;
-      return { id: _id.toString(), ...rest } as T;
+      return { id: _id.toString(), ...rest } as unknown as T;
     } catch (error) {
       // If ID is invalid format, return null
       return null;
@@ -110,7 +217,7 @@ export class MongoAdapter {
     try {
       const objectId = new ObjectId(id);
       const result = await collection.updateOne(
-        { _id: objectId },
+        { _id: objectId } as Filter<T>,
         { $set: data }
       );
       return result.modifiedCount > 0;
