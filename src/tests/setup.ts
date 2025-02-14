@@ -4,9 +4,17 @@ import { config } from '../utils/config';
 // Test database name will be the main database name with a '_test' suffix
 const TEST_DB_NAME = `${config.MONGODB_DATABASE}_test`;
 
+// For tests, we always want to use localhost since tests run outside Docker
+const TEST_CONFIG = {
+  host: 'localhost',
+  port: config.MONGODB_PORT,
+  user: config.MONGODB_USER,
+  password: config.MONGODB_PASSWORD
+};
+
 export const getTestDbUri = () => {
   // Create test URI with authentication
-  return `mongodb://phoenixuser:phoenixpass@localhost:27017/${TEST_DB_NAME}?authSource=admin`;
+  return `mongodb://${TEST_CONFIG.user}:${TEST_CONFIG.password}@${TEST_CONFIG.host}:${TEST_CONFIG.port}/${TEST_DB_NAME}?authSource=admin`;
 };
 
 export const cleanupDatabase = async () => {

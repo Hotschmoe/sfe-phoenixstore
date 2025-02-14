@@ -1,9 +1,10 @@
 import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { MongoAdapter } from "../adapters/MongoAdapter";
 import { getTestDbUri, setup, teardown } from "./setup";
+import { config } from "../utils/config";
 
 describe("MongoAdapter Query Operations", () => {
-  const adapter = new MongoAdapter(getTestDbUri(), "phoenixstore_test");
+  const adapter = new MongoAdapter(getTestDbUri(), `${config.MONGODB_DATABASE}_test`);
   const collection = `test_collection_${Date.now()}`;
 
   // Test data
