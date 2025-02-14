@@ -3,6 +3,8 @@
 ## Overview
 This guide outlines the implementation of Firebase-like features while maintaining a project-agnostic, self-hosted architecture. The goal is to provide familiar Firebase patterns while giving developers full control over their infrastructure.
 
+EMAIL / PASSWORD ONLY FOR NOW. WE CAN ADD OAUTH LATER> I DONT WANT TO MESS WITH IT FOR NOW
+
 ## Part 1: Authentication System
 
 ### Phase 1: Core Authentication Infrastructure
