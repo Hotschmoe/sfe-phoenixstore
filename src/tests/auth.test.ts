@@ -342,12 +342,8 @@ describe('AuthManager', () => {
     });
 
     test('should not sign in disabled user', async () => {
-      console.log('Starting disabled user test...');
-      
       // Create a new user specifically for this test
       const disabledUserEmail = `disabled-${Date.now()}@example.com`;
-      console.log('Creating test user:', disabledUserEmail);
-      
       let user = await authManager.createUser({
         email: disabledUserEmail,
         password: 'StrongP@ss123',
@@ -357,25 +353,21 @@ describe('AuthManager', () => {
       if (!user.id) {
         throw new Error('Failed to create test user - no ID returned');
       }
-      console.log('User created with ID:', user.id);
 
       // Verify user was created successfully
       let users = await db.query<PhoenixUser>('users', [
         { field: 'email', operator: '==', value: disabledUserEmail }
       ]);
-      console.log('Found users:', users.length);
       expect(users.length).toBe(1);
       expect(users[0].disabled).toBe(false);
 
       // Disable the user with minimal update
-      console.log('Disabling user...');
       await db.update('users', user.id, { disabled: true });
       
       // Add a small delay to ensure database consistency
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Verify user was disabled
-      console.log('Verifying disabled state...');
       users = await db.query<PhoenixUser>('users', [
         { field: 'email', operator: '==', value: disabledUserEmail }
       ]);
@@ -383,7 +375,6 @@ describe('AuthManager', () => {
       expect(users[0].disabled).toBe(true);
 
       // Attempt to sign in with disabled account
-      console.log('Attempting sign in with disabled account...');
       try {
         await authManager.signIn({
           email: disabledUserEmail,
@@ -391,12 +382,10 @@ describe('AuthManager', () => {
         });
         throw new Error('Should not succeed signing in with disabled account');
       } catch (error: any) {
-        console.log('Sign in error:', error.message);
         expect(error).toBeInstanceOf(PhoenixStoreError);
         expect(error.message).toBe('User account is disabled');
         expect(error.code).toBe('USER_DISABLED');
       }
-      console.log('Disabled user test completed');
     });
   });
 
