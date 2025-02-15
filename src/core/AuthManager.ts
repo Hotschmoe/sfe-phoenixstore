@@ -3,15 +3,40 @@ import { CreateUserParams, PhoenixUser, SignInParams, AuthTokens } from '../type
 import { PhoenixStoreError } from '../types';
 import { generateAuthTokens } from '../utils/jwt';
 
+interface PasswordValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
+interface EmailValidationResult {
+  isValid: boolean;
+  error?: string;
+}
+
 export class AuthManager {
   private readonly USERS_COLLECTION = 'users';
+  private readonly MAX_EMAIL_LENGTH = 254; // RFC 5321
+  private readonly MIN_PASSWORD_LENGTH = 8;
+  private readonly MAX_PASSWORD_LENGTH = 128; // Reasonable upper limit
+  private readonly MAX_FAILED_ATTEMPTS = 5;
+  private readonly LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
 
   constructor(private readonly db: MongoAdapter) {}
 
   async createUser(params: CreateUserParams): Promise<PhoenixUser> {
-    // Validate email format
-    if (!this.isValidEmail(params.email)) {
-      throw new PhoenixStoreError('Invalid email format', 'INVALID_EMAIL');
+    // Validate email
+    const emailValidation = this.validateEmail(params.email);
+    if (!emailValidation.isValid) {
+      throw new PhoenixStoreError(emailValidation.error || 'Invalid email', 'INVALID_EMAIL');
+    }
+
+    // Validate password
+    const passwordValidation = this.validatePassword(params.password);
+    if (!passwordValidation.isValid) {
+      throw new PhoenixStoreError(
+        `Password validation failed: ${passwordValidation.errors.join(', ')}`,
+        'INVALID_PASSWORD'
+      );
     }
 
     // Check if email already exists
@@ -35,6 +60,8 @@ export class AuthManager {
       displayName: params.displayName || null,
       photoURL: params.photoURL || null,
       disabled: false,
+      failedLoginAttempts: 0,
+      lastFailedLogin: null,
       metadata: {
         creationTime: now,
         lastSignInTime: now
@@ -51,6 +78,12 @@ export class AuthManager {
   }
 
   async signIn(params: SignInParams): Promise<AuthTokens> {
+    // Validate email format before querying
+    const emailValidation = this.validateEmail(params.email);
+    if (!emailValidation.isValid) {
+      throw new PhoenixStoreError(emailValidation.error || 'Invalid email', 'INVALID_EMAIL');
+    }
+
     // Find user by email
     const users = await this.db.query<PhoenixUser>(this.USERS_COLLECTION, [
       { field: 'email', operator: '==', value: params.email.toLowerCase() }
@@ -70,14 +103,32 @@ export class AuthManager {
       throw new PhoenixStoreError('User account is disabled', 'USER_DISABLED');
     }
 
+    // Check for account lockout
+    if (this.isAccountLocked(user)) {
+      const remainingLockTime = Math.ceil((user.lastFailedLogin! + this.LOCKOUT_DURATION - Date.now()) / 1000);
+      throw new PhoenixStoreError(
+        `Account temporarily locked. Try again in ${remainingLockTime} seconds`,
+        'ACCOUNT_LOCKED'
+      );
+    }
+
     // Verify password
     const isValidPassword = await this.verifyPassword(params.password, user.passwordHash);
     if (!isValidPassword) {
+      // Update failed login attempts
+      const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+      await this.db.update(this.USERS_COLLECTION, user.id, {
+        failedLoginAttempts: failedAttempts,
+        lastFailedLogin: Date.now()
+      });
+
       throw new PhoenixStoreError('Invalid password', 'INVALID_PASSWORD');
     }
 
-    // Update last sign in time
+    // Reset failed login attempts on successful login
     await this.db.update(this.USERS_COLLECTION, user.id, {
+      failedLoginAttempts: 0,
+      lastFailedLogin: null,
       'metadata.lastSignInTime': new Date().toISOString()
     });
 
@@ -93,8 +144,25 @@ export class AuthManager {
     return tokens;
   }
 
+  private isAccountLocked(user: PhoenixUser): boolean {
+    if (!user.failedLoginAttempts || !user.lastFailedLogin) {
+      return false;
+    }
+
+    if (user.failedLoginAttempts >= this.MAX_FAILED_ATTEMPTS) {
+      const lockoutEndTime = user.lastFailedLogin + this.LOCKOUT_DURATION;
+      if (Date.now() < lockoutEndTime) {
+        return true;
+      }
+      // If lockout has expired, reset the counters
+      user.failedLoginAttempts = 0;
+      user.lastFailedLogin = null;
+    }
+
+    return false;
+  }
+
   private async hashPassword(password: string): Promise<string> {
-    const salt = await Bun.password.hash('random_salt_string');
     return await Bun.password.hash(password, {
       algorithm: 'bcrypt',
       cost: 10
@@ -105,8 +173,84 @@ export class AuthManager {
     return await Bun.password.verify(password, hash);
   }
 
-  private isValidEmail(email: string): boolean {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  private validateEmail(email: string): EmailValidationResult {
+    if (!email) {
+      return { isValid: false, error: 'Email is required' };
+    }
+
+    if (email.length > this.MAX_EMAIL_LENGTH) {
+      return { isValid: false, error: 'Email is too long' };
+    }
+
+    // First check for basic email format
+    const basicEmailRegex = /^[^@]+@[^@]+$/;
+    if (!basicEmailRegex.test(email)) {
+      return { isValid: false, error: 'Invalid email format' };
+    }
+
+    // If basic format is valid, check domain
+    const [, domain] = email.split('@');
+    if (!domain || !domain.includes('.')) {
+      return { isValid: false, error: 'Invalid email domain' };
+    }
+
+    // Full RFC 5322 validation if basic checks pass
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    if (!emailRegex.test(email)) {
+      return { isValid: false, error: 'Invalid email format' };
+    }
+
+    return { isValid: true };
+  }
+
+  private validatePassword(password: string): PasswordValidationResult {
+    const errors: string[] = [];
+
+    if (!password) {
+      return { isValid: false, errors: ['Password is required'] };
+    }
+
+    if (password.length < this.MIN_PASSWORD_LENGTH) {
+      errors.push(`Password must be at least ${this.MIN_PASSWORD_LENGTH} characters long`);
+    }
+
+    if (password.length > this.MAX_PASSWORD_LENGTH) {
+      errors.push(`Password must not exceed ${this.MAX_PASSWORD_LENGTH} characters`);
+    }
+
+    // Only proceed with other checks if length is valid
+    if (errors.length === 0) {
+      if (!/[A-Z]/.test(password)) {
+        errors.push('Password must contain at least one uppercase letter');
+      }
+
+      if (!/[a-z]/.test(password)) {
+        errors.push('Password must contain at least one lowercase letter');
+      }
+
+      if (!/\d/.test(password)) {
+        errors.push('Password must contain at least one number');
+      }
+
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        errors.push('Password must contain at least one special character');
+      }
+
+      // Optional strength checks - only apply if basic requirements are met
+      if (errors.length === 0) {
+        if (/^[A-Za-z]+\d+[!@#$%^&*(),.?":{}|<>]*$/.test(password)) {
+          errors.push('Password should not follow a simple pattern');
+        }
+
+        if (/(.)\1{2,}/.test(password)) {
+          errors.push('Password should not contain repeated characters');
+        }
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
   }
 } 
