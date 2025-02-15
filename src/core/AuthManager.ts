@@ -1,7 +1,8 @@
 import { MongoAdapter } from '../adapters/MongoAdapter';
-import { CreateUserParams, PhoenixUser, SignInParams, AuthTokens } from '../types/auth';
+import { CreateUserParams, PhoenixUser, SignInParams, AuthTokens, RefreshTokenParams, TokenBlacklist, JWTPayload } from '../types/auth';
 import { PhoenixStoreError } from '../types';
-import { generateAuthTokens } from '../utils/jwt';
+import { generateAuthTokens, verifyToken, getExpirationFromDuration } from '../utils/jwt';
+import { createHash } from 'crypto';
 
 interface PasswordValidationResult {
   isValid: boolean;
@@ -15,6 +16,7 @@ interface EmailValidationResult {
 
 export class AuthManager {
   private readonly USERS_COLLECTION = 'users';
+  private readonly BLACKLIST_COLLECTION = 'token_blacklist';
   private readonly MAX_EMAIL_LENGTH = 254; // RFC 5321
   private readonly MIN_PASSWORD_LENGTH = 8;
   private readonly MAX_PASSWORD_LENGTH = 128; // Reasonable upper limit
@@ -136,6 +138,78 @@ export class AuthManager {
 
     const tokens = await generateAuthTokens(tokenPayload);
     return tokens;
+  }
+
+  async refreshToken(params: RefreshTokenParams): Promise<AuthTokens> {
+    // Verify the refresh token
+    const payload = await verifyToken(params.refreshToken, 'refresh');
+    
+    // Check if token is blacklisted
+    const isBlacklisted = await this.isTokenBlacklisted(params.refreshToken);
+    if (isBlacklisted) {
+      throw new PhoenixStoreError('Token has been revoked', 'TOKEN_REVOKED');
+    }
+
+    // Get user to verify they still exist and are not disabled
+    const users = await this.db.query<PhoenixUser>(this.USERS_COLLECTION, [
+      { field: 'email', operator: '==', value: payload.email }
+    ]);
+
+    if (users.length === 0) {
+      throw new PhoenixStoreError('User not found', 'USER_NOT_FOUND');
+    }
+
+    const user = users[0];
+    if (user.disabled) {
+      throw new PhoenixStoreError('User account is disabled', 'USER_DISABLED');
+    }
+
+    // Generate new tokens
+    const tokenPayload = {
+      sub: user.id!,
+      email: user.email,
+      ...(user.displayName && { displayName: user.displayName }),
+      ...(user.customClaims && { customClaims: user.customClaims })
+    };
+
+    // Blacklist the old refresh token
+    await this.blacklistToken(params.refreshToken, user.id!, 'refresh');
+
+    // Generate new tokens
+    return await generateAuthTokens(tokenPayload);
+  }
+
+  async verifyToken(token: string, type: 'access' | 'refresh'): Promise<JWTPayload> {
+    // Check blacklist first
+    const isBlacklisted = await this.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      throw new PhoenixStoreError('Token has been revoked', 'TOKEN_REVOKED');
+    }
+
+    // Then verify token validity
+    return await verifyToken(token, type);
+  }
+
+  async revokeToken(token: string, type: 'access' | 'refresh'): Promise<void> {
+    try {
+      // Extract payload without blacklist check
+      const payload = await verifyToken(token, type);
+      
+      // Blacklist the token
+      await this.blacklistToken(token, payload.sub, type);
+    } catch (error) {
+      if (error instanceof PhoenixStoreError && error.code === 'TOKEN_EXPIRED') {
+        // For expired tokens, still try to blacklist them
+        try {
+          const payload = await verifyToken(token, type);
+          await this.blacklistToken(token, payload.sub, type);
+        } catch {
+          throw new PhoenixStoreError('Invalid token', 'INVALID_TOKEN');
+        }
+      } else {
+        throw new PhoenixStoreError('Invalid token', 'INVALID_TOKEN');
+      }
+    }
   }
 
   private isAccountLocked(user: PhoenixUser): boolean {
@@ -266,5 +340,40 @@ export class AuthManager {
         'ACCOUNT_LOCKED'
       );
     }
+  }
+
+  private async blacklistToken(token: string, userId: string, type: 'access' | 'refresh'): Promise<void> {
+    const hashedToken = this.hashToken(token);
+    const expiresAt = type === 'access' 
+      ? getExpirationFromDuration(process.env.JWT_ACCESS_EXPIRES_IN || '15m')
+      : getExpirationFromDuration(process.env.JWT_REFRESH_EXPIRES_IN || '7d');
+
+    // Add to blacklist
+    await this.db.add(this.BLACKLIST_COLLECTION, {
+      token: hashedToken,
+      expiresAt,
+      revokedAt: Date.now(),
+      userId,
+      type
+    });
+  }
+
+  private async isTokenBlacklisted(token: string): Promise<boolean> {
+    try {
+      const hashedToken = this.hashToken(token);
+      const blacklistedTokens = await this.db.query<TokenBlacklist>(this.BLACKLIST_COLLECTION, [
+        { field: 'token', operator: '==', value: hashedToken },
+        { field: 'expiresAt', operator: '>', value: Date.now() }
+      ]);
+
+      return blacklistedTokens.length > 0;
+    } catch (error) {
+      // If there's any error checking the blacklist, assume token is not blacklisted
+      return false;
+    }
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 } 

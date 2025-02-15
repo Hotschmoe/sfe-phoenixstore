@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { MongoAdapter } from '../adapters/MongoAdapter';
 import { AuthManager } from '../core/AuthManager';
-import { CreateUserParams, SignInParams, PhoenixUser } from '../types/auth';
+import { CreateUserParams, SignInParams, PhoenixUser, AuthTokens } from '../types/auth';
 import { PhoenixStoreError } from '../types';
 import { verifyToken } from '../utils/jwt';
 import { getTestDbUri, setup, teardown } from './setup';
@@ -391,6 +391,7 @@ describe('AuthManager', () => {
 
   describe('Token Management', () => {
     let testTokenUser: PhoenixUser;
+    let userTokens: AuthTokens;
 
     beforeEach(async () => {
       // Create a fresh user for token tests
@@ -400,37 +401,144 @@ describe('AuthManager', () => {
         password: 'StrongP@ss123',
         displayName: 'Token Test User'
       });
+
+      // Sign in to get initial tokens
+      userTokens = await authManager.signIn({
+        email,
+        password: 'StrongP@ss123'
+      });
     });
 
     test('should generate different tokens for access and refresh', async () => {
-      const credentials: SignInParams = {
-        email: testTokenUser.email,
-        password: 'StrongP@ss123'
-      };
-
-      const tokens = await authManager.signIn(credentials);
-      
-      const accessPayload = await verifyToken(tokens.accessToken);
-      const refreshPayload = await verifyToken(tokens.refreshToken);
+      const accessPayload = await verifyToken(userTokens.accessToken);
+      const refreshPayload = await verifyToken(userTokens.refreshToken);
 
       expect(accessPayload.type).toBe('access');
       expect(refreshPayload.type).toBe('refresh');
-      expect(tokens.accessToken).not.toBe(tokens.refreshToken);
+      expect(userTokens.accessToken).not.toBe(userTokens.refreshToken);
     });
 
     test('should include all required claims in tokens', async () => {
-      const credentials: SignInParams = {
-        email: testTokenUser.email,
-        password: 'StrongP@ss123'
-      };
-
-      const tokens = await authManager.signIn(credentials);
-      const payload = await verifyToken(tokens.accessToken);
+      const payload = await verifyToken(userTokens.accessToken);
 
       expect(payload).toHaveProperty('sub');
       expect(payload).toHaveProperty('email');
       expect(payload).toHaveProperty('type');
       expect(payload.email).toBe(testTokenUser.email.toLowerCase());
+    });
+
+    describe('Token Refresh', () => {
+      test('should refresh tokens with valid refresh token', async () => {
+        const newTokens = await authManager.refreshToken({
+          refreshToken: userTokens.refreshToken
+        });
+
+        expect(newTokens.accessToken).toBeDefined();
+        expect(newTokens.refreshToken).toBeDefined();
+        expect(newTokens.accessToken).not.toBe(userTokens.accessToken);
+        expect(newTokens.refreshToken).not.toBe(userTokens.refreshToken);
+
+        // Verify new tokens
+        const accessPayload = await verifyToken(newTokens.accessToken);
+        const refreshPayload = await verifyToken(newTokens.refreshToken);
+        if (!testTokenUser.id) {
+          throw new Error('Test user ID not found');
+        }
+        expect(accessPayload.sub).toBe(testTokenUser.id);
+        expect(refreshPayload.sub).toBe(testTokenUser.id);
+      });
+
+      test('should not refresh tokens with access token', async () => {
+        await expect(
+          authManager.refreshToken({
+            refreshToken: userTokens.accessToken
+          })
+        ).rejects.toThrow('Invalid refresh token');
+      });
+
+      test('should not refresh tokens for disabled user', async () => {
+        if (!testTokenUser.id) {
+          throw new Error('Test user ID not found');
+        }
+        // Disable the user
+        await db.update('users', testTokenUser.id, { disabled: true });
+        
+        // Add a small delay to ensure database consistency
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await expect(
+          authManager.refreshToken({
+            refreshToken: userTokens.refreshToken
+          })
+        ).rejects.toThrow('User account is disabled');
+      });
+    });
+
+    describe('Token Revocation', () => {
+      test('should revoke access token', async () => {
+        await authManager.revokeToken(userTokens.accessToken, 'access');
+
+        // Try to use the token
+        await expect(
+          authManager.verifyToken(userTokens.accessToken, 'access')
+        ).rejects.toThrow('Token has been revoked');
+      });
+
+      test('should revoke refresh token', async () => {
+        await authManager.revokeToken(userTokens.refreshToken, 'refresh');
+
+        // Try to refresh with revoked token
+        await expect(
+          authManager.refreshToken({
+            refreshToken: userTokens.refreshToken
+          })
+        ).rejects.toThrow('Token has been revoked');
+      });
+
+      test('should revoke expired tokens', async () => {
+        // Wait for token to expire (we'll use a very short-lived token for this test)
+        const originalExpiry = process.env.JWT_ACCESS_EXPIRES_IN;
+        process.env.JWT_ACCESS_EXPIRES_IN = '1s';
+        const shortLivedTokens = await authManager.signIn({
+          email: testTokenUser.email,
+          password: 'StrongP@ss123'
+        });
+
+        // Wait for token to expire
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Should still be able to revoke expired token
+        await authManager.revokeToken(shortLivedTokens.accessToken, 'access');
+
+        // Verify token is blacklisted
+        await expect(
+          authManager.verifyToken(shortLivedTokens.accessToken, 'access')
+        ).rejects.toThrow(/Token has (expired|been revoked)/);
+
+        // Restore original expiry
+        process.env.JWT_ACCESS_EXPIRES_IN = originalExpiry;
+      });
+
+      test('should not allow reuse of refresh token after refresh', async () => {
+        // First refresh is successful
+        const newTokens = await authManager.refreshToken({
+          refreshToken: userTokens.refreshToken
+        });
+
+        // Second refresh with old token should fail
+        await expect(
+          authManager.refreshToken({
+            refreshToken: userTokens.refreshToken
+          })
+        ).rejects.toThrow('Token has been revoked');
+
+        // New refresh token should work
+        await expect(
+          authManager.refreshToken({
+            refreshToken: newTokens.refreshToken
+          })
+        ).resolves.toBeDefined();
+      });
     });
   });
 }); 

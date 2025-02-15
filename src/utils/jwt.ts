@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { JWTPayload } from '../types/auth';
 import { PhoenixStoreError } from '../types';
+import { randomUUID } from 'crypto';
 
 const JWT_ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
@@ -17,7 +18,8 @@ if (!JWT_SECRET) {
 const secretKey = new TextEncoder().encode(JWT_SECRET);
 
 export async function generateAccessToken(payload: Omit<JWTPayload, 'type'>): Promise<string> {
-  const token = await new SignJWT({ ...payload, type: 'access' })
+  const jti = randomUUID(); // Generate unique token ID
+  const token = await new SignJWT({ ...payload, type: 'access', jti })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(JWT_ACCESS_EXPIRES_IN)
@@ -27,7 +29,8 @@ export async function generateAccessToken(payload: Omit<JWTPayload, 'type'>): Pr
 }
 
 export async function generateRefreshToken(payload: Omit<JWTPayload, 'type'>): Promise<string> {
-  const token = await new SignJWT({ ...payload, type: 'refresh' })
+  const jti = randomUUID(); // Generate unique token ID
+  const token = await new SignJWT({ ...payload, type: 'refresh', jti })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(JWT_REFRESH_EXPIRES_IN)
@@ -36,11 +39,24 @@ export async function generateRefreshToken(payload: Omit<JWTPayload, 'type'>): P
   return token;
 }
 
-export async function verifyToken(token: string): Promise<JWTPayload> {
+export async function verifyToken(token: string, expectedType?: 'access' | 'refresh'): Promise<JWTPayload> {
   try {
     const { payload } = await jwtVerify(token, secretKey);
-    return payload as JWTPayload;
-  } catch (error) {
+    const jwtPayload = payload as unknown as JWTPayload;
+
+    // Verify token type if expected type is provided
+    if (expectedType && jwtPayload.type !== expectedType) {
+      throw new PhoenixStoreError(
+        expectedType === 'refresh' ? 'Invalid refresh token' : 'Invalid access token',
+        expectedType === 'refresh' ? 'INVALID_REFRESH_TOKEN' : 'INVALID_TOKEN'
+      );
+    }
+
+    return jwtPayload;
+  } catch (error: any) {
+    if (error instanceof PhoenixStoreError) {
+      throw error;
+    }
     if (error.code === 'ERR_JWT_EXPIRED') {
       throw new PhoenixStoreError('Token has expired', 'TOKEN_EXPIRED');
     }
@@ -88,4 +104,9 @@ function parseDuration(duration: string): number {
         'CONFIGURATION_ERROR'
       );
   }
+}
+
+// Helper to get expiration timestamp from duration string
+export function getExpirationFromDuration(duration: string): number {
+  return Date.now() + parseDuration(duration);
 } 

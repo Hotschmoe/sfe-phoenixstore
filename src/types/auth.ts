@@ -32,12 +32,17 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+export interface RefreshTokenParams {
+  refreshToken: string;
+}
+
 export interface JWTPayload {
   sub: string; // user id
   email: string;
   displayName?: string;
   customClaims?: Record<string, any>;
   type: 'access' | 'refresh';
+  jti?: string; // JWT ID for revocation
 }
 
 export type AuthError = 
@@ -48,4 +53,15 @@ export type AuthError =
   | 'USER_DISABLED'
   | 'TOKEN_EXPIRED'
   | 'INVALID_TOKEN'
-  | 'TOKEN_REVOKED'; 
+  | 'TOKEN_REVOKED'
+  | 'INVALID_REFRESH_TOKEN'
+  | 'TOKEN_BLACKLISTED';
+
+// Token blacklist entry
+export interface TokenBlacklist extends DocumentData {
+  token: string;     // Hashed token value
+  expiresAt: number; // Timestamp when token expires
+  revokedAt: number; // Timestamp when token was revoked
+  userId: string;    // User who owned the token
+  type: 'access' | 'refresh'; // Type of token
+} 
