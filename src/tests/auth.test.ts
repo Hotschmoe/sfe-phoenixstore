@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
+import { describe, expect, test, beforeAll, afterAll, beforeEach } from 'bun:test';
 import { MongoAdapter } from '../adapters/MongoAdapter';
 import { AuthManager } from '../core/AuthManager';
 import { CreateUserParams, SignInParams, PhoenixUser } from '../types/auth';
@@ -146,16 +146,16 @@ describe('AuthManager', () => {
 
     describe('Password Validation', () => {
       const validPasswords = [
-        'Test123!@#',
-        'Complex1!Password',
-        'Very2Complex!Password',
-        'SuperSecure123!@#',
-        '!@#$%^&*()123ABCabc'
+        'StrongP@ss123',
+        'C0mplex!Pass',
+        'Secure123!@#Pwd',
+        'P@ssw0rd!Complex',
+        'Test!Pass123Word'
       ];
 
       validPasswords.forEach(password => {
         test(`should accept valid password: ${password}`, async () => {
-          const user = { ...testUser, email: `test-${password}@example.com`, password };
+          const user = { ...testUser, email: `test-${Date.now()}@example.com`, password };
           await expect(authManager.createUser(user)).resolves.toBeDefined();
         });
       });
@@ -186,114 +186,140 @@ describe('AuthManager', () => {
   });
 
   describe('Authentication', () => {
-    test('should sign in user with correct credentials', async () => {
-      const credentials: SignInParams = {
-        email: testUser.email,
-        password: testUser.password
-      };
+    let testUserCredentials: SignInParams;
+    let userId: string;
 
+    beforeEach(async () => {
+      // Create a fresh test user for each auth test
+      const uniqueEmail = `test-${Date.now()}@example.com`;
+      const user = await authManager.createUser({
+        email: uniqueEmail,
+        password: 'StrongP@ss123',
+        displayName: 'Test User'
+      });
+      if (!user.id) {
+        throw new Error('Failed to create test user - no ID returned');
+      }
+      userId = user.id;
+      testUserCredentials = {
+        email: uniqueEmail,
+        password: 'StrongP@ss123'
+      };
+    });
+
+    test('should sign in user with correct credentials', async () => {
       const beforeSignIn = Date.now();
-      const tokens = await authManager.signIn(credentials);
+      const tokens = await authManager.signIn(testUserCredentials);
       
-      // Token validation
       expect(tokens).toBeDefined();
       expect(tokens.accessToken).toBeDefined();
       expect(tokens.refreshToken).toBeDefined();
       expect(tokens.expiresIn).toBeGreaterThan(0);
 
-      // Verify access token payload
       const payload = await verifyToken(tokens.accessToken);
-      expect(payload.email).toBe(testUser.email.toLowerCase());
+      expect(payload.email).toBe(testUserCredentials.email.toLowerCase());
       expect(payload.type).toBe('access');
       expect(payload.sub).toBeDefined();
 
-      // Verify last sign in time was updated
       const users = await db.query<PhoenixUser>('users', [
-        { field: 'email', operator: '==', value: testUser.email }
+        { field: 'email', operator: '==', value: testUserCredentials.email }
       ]);
       const user = users[0];
       expect(user).toBeDefined();
-      if (user && user.metadata.lastSignInTime) {
-        expect(new Date(user.metadata.lastSignInTime).getTime()).toBeGreaterThan(beforeSignIn);
-      }
-      // Verify failed attempts were reset
+      expect(new Date(user.metadata.lastSignInTime).getTime()).toBeGreaterThan(beforeSignIn);
       expect(user.failedLoginAttempts).toBe(0);
       expect(user.lastFailedLogin).toBeNull();
     });
 
     describe('Failed Login Attempts', () => {
       test('should increment failed attempts and eventually lock account', async () => {
-        const credentials: SignInParams = {
-          email: testUser.email,
-          password: 'wrong-password'
-        };
-
-        // Attempt multiple failed logins
-        for (let i = 0; i < 4; i++) {
+        const wrongCredentials = { ...testUserCredentials, password: 'wrong-password' };
+        
+        // Track failed attempts
+        for (let i = 0; i < 5; i++) {
           try {
-            await authManager.signIn(credentials);
+            await authManager.signIn(wrongCredentials);
+            throw new Error('Should not succeed with wrong password');
           } catch (error: any) {
-            if (error instanceof PhoenixStoreError) {
-              expect(error.message).toBe('Invalid password');
+            expect(error).toBeInstanceOf(PhoenixStoreError);
+            
+            // Last attempt should trigger lockout
+            if (i === 4) {
+              expect(error.message).toContain('Account temporarily locked');
             } else {
-              throw error;
+              expect(error.message).toBe('Invalid password');
             }
-          }
 
-          // Verify attempt count after each failure
-          const users = await db.query<PhoenixUser>('users', [
-            { field: 'email', operator: '==', value: testUser.email }
-          ]);
-          const user = users[0];
-          expect(user.failedLoginAttempts).toBe(i + 1);
-          expect(user.lastFailedLogin).toBeDefined();
+            // Verify attempt count
+            const users = await db.query<PhoenixUser>('users', [
+              { field: 'email', operator: '==', value: testUserCredentials.email }
+            ]);
+            const user = users[0];
+            expect(user.failedLoginAttempts).toBe(i + 1);
+            expect(user.lastFailedLogin).toBeDefined();
+          }
+        }
+      });
+
+      test('should maintain lockout for duration', async () => {
+        // First lock the account
+        const wrongCredentials = { ...testUserCredentials, password: 'wrong-password' };
+        
+        // Attempt until locked
+        for (let i = 0; i < 5; i++) {
+          try {
+            await authManager.signIn(wrongCredentials);
+          } catch (error) {
+            // Expected errors
+          }
         }
 
-        // Fifth attempt should lock the account
+        // Verify account is locked even with correct credentials
         try {
-          await authManager.signIn(credentials);
+          await authManager.signIn(testUserCredentials);
+          throw new Error('Should not succeed while locked');
         } catch (error: any) {
-          if (error instanceof PhoenixStoreError) {
-            expect(error.message).toBe('Invalid password');
-          } else {
-            throw error;
-          }
+          expect(error).toBeInstanceOf(PhoenixStoreError);
+          expect(error.message).toContain('Account temporarily locked');
+          expect(error.code).toBe('ACCOUNT_LOCKED');
         }
-
-        // Verify account is locked
-        try {
-          await authManager.signIn({
-            email: testUser.email,
-            password: testUser.password // Even with correct password
-          });
-          throw new Error('Should not reach here');
-        } catch (error: any) {
-          if (error instanceof PhoenixStoreError) {
-            expect(error.message).toContain('Account temporarily locked');
-          } else {
-            throw error;
-          }
-        }
-      }, 10000); // Increase timeout for this test
+      });
 
       test('should reset failed attempts after successful login', async () => {
-        // Wait for lockout to expire (using a mock duration for tests)
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Create a fresh user for this test
+        const email = `reset-${Date.now()}@example.com`;
+        const password = 'StrongP@ss123';
+        const user = await authManager.createUser({
+          email,
+          password,
+          displayName: 'Reset Test User'
+        });
 
-        // Try correct login
-        const credentials: SignInParams = {
-          email: testUser.email,
-          password: testUser.password
-        };
+        // Fail twice
+        const wrongCredentials = { email, password: 'wrong-password' };
+        for (let i = 0; i < 2; i++) {
+          try {
+            await authManager.signIn(wrongCredentials);
+          } catch (error) {
+            // Expected errors
+          }
+        }
 
-        await authManager.signIn(credentials);
-
-        const users = await db.query<PhoenixUser>('users', [
-          { field: 'email', operator: '==', value: testUser.email }
+        // Verify failed attempts were recorded
+        let users = await db.query<PhoenixUser>('users', [
+          { field: 'email', operator: '==', value: email }
         ]);
-        const user = users[0];
-        expect(user.failedLoginAttempts).toBe(0);
-        expect(user.lastFailedLogin).toBeNull();
+        expect(users[0].failedLoginAttempts).toBe(2);
+
+        // Successfully sign in
+        await authManager.signIn({ email, password });
+
+        // Verify attempts were reset
+        users = await db.query<PhoenixUser>('users', [
+          { field: 'email', operator: '==', value: email }
+        ]);
+        expect(users[0].failedLoginAttempts).toBe(0);
+        expect(users[0].lastFailedLogin).toBeNull();
       });
     });
 
@@ -316,27 +342,25 @@ describe('AuthManager', () => {
     });
 
     test('should not sign in disabled user', async () => {
-      // Disable the test user
-      const users = await db.query<PhoenixUser>('users', [
-        { field: 'email', operator: '==', value: testUser.email }
-      ]);
-      
-      const user = users[0];
-      if (!user || !user.id) {
-        throw new Error('Test user not found');
-      }
+      // Create a new user specifically for this test
+      const disabledUserEmail = `disabled-${Date.now()}@example.com`;
+      const user = await authManager.createUser({
+        email: disabledUserEmail,
+        password: 'StrongP@ss123',
+        displayName: 'Disabled User'
+      });
 
+      // Disable the user
       await db.update('users', user.id, { disabled: true });
 
+      // Attempt to sign in
       const credentials: SignInParams = {
-        email: testUser.email,
-        password: testUser.password
+        email: disabledUserEmail,
+        password: 'StrongP@ss123'
       };
 
-      await expect(authManager.signIn(credentials)).rejects.toThrow('User account is disabled');
-
-      // Re-enable the user for other tests
-      await db.update('users', user.id, { disabled: false });
+      await expect(authManager.signIn(credentials))
+        .rejects.toThrow('User account is disabled');
     });
   });
 

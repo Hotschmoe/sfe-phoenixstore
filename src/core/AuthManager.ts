@@ -115,13 +115,7 @@ export class AuthManager {
     // Verify password
     const isValidPassword = await this.verifyPassword(params.password, user.passwordHash);
     if (!isValidPassword) {
-      // Update failed login attempts
-      const failedAttempts = (user.failedLoginAttempts || 0) + 1;
-      await this.db.update(this.USERS_COLLECTION, user.id, {
-        failedLoginAttempts: failedAttempts,
-        lastFailedLogin: Date.now()
-      });
-
+      await this.updateFailedAttempts(user);
       throw new PhoenixStoreError('Invalid password', 'INVALID_PASSWORD');
     }
 
@@ -182,19 +176,21 @@ export class AuthManager {
       return { isValid: false, error: 'Email is too long' };
     }
 
-    // First check for basic email format
-    const basicEmailRegex = /^[^@]+@[^@]+$/;
-    if (!basicEmailRegex.test(email)) {
+    // Check for @ symbol first
+    if (!email.includes('@')) {
       return { isValid: false, error: 'Invalid email format' };
     }
 
-    // If basic format is valid, check domain
+    // Domain check before full format check
     const [, domain] = email.split('@');
-    if (!domain || !domain.includes('.')) {
+    if (!domain) {
+      return { isValid: false, error: 'Invalid email domain' };
+    }
+    if (!domain.includes('.')) {
       return { isValid: false, error: 'Invalid email domain' };
     }
 
-    // Full RFC 5322 validation if basic checks pass
+    // Full RFC 5322 validation
     const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
     if (!emailRegex.test(email)) {
       return { isValid: false, error: 'Invalid email format' };
@@ -218,7 +214,7 @@ export class AuthManager {
       errors.push(`Password must not exceed ${this.MAX_PASSWORD_LENGTH} characters`);
     }
 
-    // Only proceed with other checks if length is valid
+    // Only check other criteria if length requirements are met
     if (errors.length === 0) {
       if (!/[A-Z]/.test(password)) {
         errors.push('Password must contain at least one uppercase letter');
@@ -236,15 +232,9 @@ export class AuthManager {
         errors.push('Password must contain at least one special character');
       }
 
-      // Optional strength checks - only apply if basic requirements are met
-      if (errors.length === 0) {
-        if (/^[A-Za-z]+\d+[!@#$%^&*(),.?":{}|<>]*$/.test(password)) {
-          errors.push('Password should not follow a simple pattern');
-        }
-
-        if (/(.)\1{2,}/.test(password)) {
-          errors.push('Password should not contain repeated characters');
-        }
+      // Only check for repeated characters if all other criteria are met
+      if (errors.length === 0 && /(.)\1{2,}/.test(password)) {
+        errors.push('Password should not contain repeated characters');
       }
     }
 
@@ -252,5 +242,29 @@ export class AuthManager {
       isValid: errors.length === 0,
       errors
     };
+  }
+
+  private async updateFailedAttempts(user: PhoenixUser): Promise<void> {
+    if (!user.id) return;
+
+    const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+    const lastFailedLogin = Date.now();
+
+    await this.db.update(this.USERS_COLLECTION, user.id, {
+      failedLoginAttempts: failedAttempts,
+      lastFailedLogin
+    });
+
+    // Update the user object to reflect the changes
+    user.failedLoginAttempts = failedAttempts;
+    user.lastFailedLogin = lastFailedLogin;
+
+    // Check if this update triggered a lockout
+    if (failedAttempts >= this.MAX_FAILED_ATTEMPTS) {
+      throw new PhoenixStoreError(
+        `Account temporarily locked. Try again in ${this.LOCKOUT_DURATION / 1000} seconds`,
+        'ACCOUNT_LOCKED'
+      );
+    }
   }
 } 
