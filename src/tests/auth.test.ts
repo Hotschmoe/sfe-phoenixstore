@@ -3,6 +3,7 @@ import { MongoAdapter } from '../adapters/MongoAdapter';
 import { AuthManager } from '../core/AuthManager';
 import { CreateUserParams, SignInParams, PhoenixUser } from '../types/auth';
 import { verifyToken } from '../utils/jwt';
+import { getTestDbUri, setup, teardown } from './setup';
 
 describe('AuthManager', () => {
   let db: MongoAdapter;
@@ -14,40 +15,52 @@ describe('AuthManager', () => {
   };
 
   beforeAll(async () => {
-    // Initialize MongoDB connection
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-    const dbName = process.env.MONGODB_DATABASE || 'phoenixstore_test';
-    
-    db = new MongoAdapter(mongoUri, dbName);
-    await db.connect();
-    
-    authManager = new AuthManager(db);
-    
-    // Clean up any existing test users
-    const users = await db.query<PhoenixUser>('users', [
-      { field: 'email', operator: '==', value: testUser.email }
-    ]);
-    
-    for (const user of users) {
-      if (user.id) {
-        await db.delete('users', user.id);
+    // Initialize MongoDB connection using test utilities
+    console.log('Starting AuthManager tests...');
+    try {
+      await setup();
+      console.log('Setting up test database connection...');
+      
+      db = new MongoAdapter(getTestDbUri(), 'phoenixstore_test');
+      await db.connect();
+      
+      authManager = new AuthManager(db);
+      console.log('Test database connected');
+      
+      // Clean up any existing test users
+      const users = await db.query<PhoenixUser>('users', [
+        { field: 'email', operator: '==', value: testUser.email }
+      ]);
+      
+      for (const user of users) {
+        if (user.id) {
+          await db.delete('users', user.id);
+        }
       }
+    } catch (error) {
+      console.error('Failed to setup AuthManager tests:', error);
+      throw error;
     }
   });
 
   afterAll(async () => {
-    // Clean up test data
-    const users = await db.query<PhoenixUser>('users', [
-      { field: 'email', operator: '==', value: testUser.email }
-    ]);
-    
-    for (const user of users) {
-      if (user.id) {
-        await db.delete('users', user.id);
+    try {
+      // Clean up test data
+      const users = await db.query<PhoenixUser>('users', [
+        { field: 'email', operator: '==', value: testUser.email }
+      ]);
+      
+      for (const user of users) {
+        if (user.id) {
+          await db.delete('users', user.id);
+        }
       }
+      
+      await db.disconnect();
+      await teardown();
+    } catch (error) {
+      console.error('Failed to cleanup AuthManager tests:', error);
     }
-    
-    await db.disconnect();
   });
 
   test('should create a new user', async () => {
@@ -55,7 +68,9 @@ describe('AuthManager', () => {
     
     expect(user).toBeDefined();
     expect(user.email).toBe(testUser.email.toLowerCase());
-    expect(user.displayName).toBe(testUser.displayName);
+    if (testUser.displayName) {
+      expect(user.displayName).toBe(testUser.displayName);
+    }
     expect(user.disabled).toBe(false);
     expect(user.emailVerified).toBe(false);
     expect(user.passwordHash).toBeDefined();
