@@ -18,6 +18,7 @@
     "@elysiajs/swagger": "^1.2.0",
     "dotenv": "^16.4.1",
     "elysia": "^1.2.12",
+    "jose": "^5.9.6",
     "mongodb": "^6.3.0"
   },
   "devDependencies": {
