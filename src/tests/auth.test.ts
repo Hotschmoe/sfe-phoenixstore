@@ -342,33 +342,81 @@ describe('AuthManager', () => {
     });
 
     test('should not sign in disabled user', async () => {
+      console.log('Starting disabled user test...');
+      
       // Create a new user specifically for this test
       const disabledUserEmail = `disabled-${Date.now()}@example.com`;
-      const user = await authManager.createUser({
+      console.log('Creating test user:', disabledUserEmail);
+      
+      let user = await authManager.createUser({
         email: disabledUserEmail,
         password: 'StrongP@ss123',
         displayName: 'Disabled User'
       });
 
-      // Disable the user
+      if (!user.id) {
+        throw new Error('Failed to create test user - no ID returned');
+      }
+      console.log('User created with ID:', user.id);
+
+      // Verify user was created successfully
+      let users = await db.query<PhoenixUser>('users', [
+        { field: 'email', operator: '==', value: disabledUserEmail }
+      ]);
+      console.log('Found users:', users.length);
+      expect(users.length).toBe(1);
+      expect(users[0].disabled).toBe(false);
+
+      // Disable the user with minimal update
+      console.log('Disabling user...');
       await db.update('users', user.id, { disabled: true });
+      
+      // Add a small delay to ensure database consistency
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Attempt to sign in
-      const credentials: SignInParams = {
-        email: disabledUserEmail,
-        password: 'StrongP@ss123'
-      };
+      // Verify user was disabled
+      console.log('Verifying disabled state...');
+      users = await db.query<PhoenixUser>('users', [
+        { field: 'email', operator: '==', value: disabledUserEmail }
+      ]);
+      expect(users.length).toBe(1);
+      expect(users[0].disabled).toBe(true);
 
-      await expect(authManager.signIn(credentials))
-        .rejects.toThrow('User account is disabled');
+      // Attempt to sign in with disabled account
+      console.log('Attempting sign in with disabled account...');
+      try {
+        await authManager.signIn({
+          email: disabledUserEmail,
+          password: 'StrongP@ss123'
+        });
+        throw new Error('Should not succeed signing in with disabled account');
+      } catch (error: any) {
+        console.log('Sign in error:', error.message);
+        expect(error).toBeInstanceOf(PhoenixStoreError);
+        expect(error.message).toBe('User account is disabled');
+        expect(error.code).toBe('USER_DISABLED');
+      }
+      console.log('Disabled user test completed');
     });
   });
 
   describe('Token Management', () => {
+    let testTokenUser: PhoenixUser;
+
+    beforeEach(async () => {
+      // Create a fresh user for token tests
+      const email = `token-${Date.now()}@example.com`;
+      testTokenUser = await authManager.createUser({
+        email,
+        password: 'StrongP@ss123',
+        displayName: 'Token Test User'
+      });
+    });
+
     test('should generate different tokens for access and refresh', async () => {
       const credentials: SignInParams = {
-        email: testUser.email,
-        password: testUser.password
+        email: testTokenUser.email,
+        password: 'StrongP@ss123'
       };
 
       const tokens = await authManager.signIn(credentials);
@@ -383,8 +431,8 @@ describe('AuthManager', () => {
 
     test('should include all required claims in tokens', async () => {
       const credentials: SignInParams = {
-        email: testUser.email,
-        password: testUser.password
+        email: testTokenUser.email,
+        password: 'StrongP@ss123'
       };
 
       const tokens = await authManager.signIn(credentials);
@@ -393,7 +441,7 @@ describe('AuthManager', () => {
       expect(payload).toHaveProperty('sub');
       expect(payload).toHaveProperty('email');
       expect(payload).toHaveProperty('type');
-      expect(payload.email).toBe(testUser.email.toLowerCase());
+      expect(payload.email).toBe(testTokenUser.email.toLowerCase());
     });
   });
 }); 
