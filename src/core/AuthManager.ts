@@ -180,47 +180,31 @@ export class AuthManager {
   }
 
   async verifyToken(token: string, type: 'access' | 'refresh'): Promise<JWTPayload> {
-    console.log(`[DEBUG] Starting token verification for ${type} token`);
     // Check blacklist first
-    console.log('[DEBUG] Checking token blacklist');
     const isBlacklisted = await this.isTokenBlacklisted(token);
-    console.log('[DEBUG] Blacklist check result:', isBlacklisted);
     
     if (isBlacklisted) {
-      console.log('[DEBUG] Token is blacklisted');
       throw new PhoenixStoreError('Token has been revoked', 'TOKEN_REVOKED');
     }
 
     // Then verify token validity
-    console.log('[DEBUG] Verifying token validity');
-    const result = await verifyToken(token, type);
-    console.log('[DEBUG] Token verification successful');
-    return result;
+    return await verifyToken(token, type);
   }
 
   async revokeToken(token: string, type: 'access' | 'refresh'): Promise<void> {
-    console.log(`[DEBUG] Starting token revocation for ${type} token`);
     try {
       // Extract payload without blacklist check
-      console.log('[DEBUG] Verifying token before revocation');
       const payload = await verifyToken(token, type);
-      console.log('[DEBUG] Token verified, payload:', { sub: payload.sub, type: payload.type });
       
       // Blacklist the token
-      console.log('[DEBUG] Adding token to blacklist');
       await this.blacklistToken(token, payload.sub, type);
-      console.log('[DEBUG] Token successfully blacklisted');
     } catch (error) {
-      console.log('[DEBUG] Error in revokeToken:', error);
       if (error instanceof PhoenixStoreError && error.code === 'TOKEN_EXPIRED') {
         // For expired tokens, still try to blacklist them
-        console.log('[DEBUG] Token expired, attempting to blacklist anyway');
         try {
           const payload = await verifyToken(token, type);
           await this.blacklistToken(token, payload.sub, type);
-          console.log('[DEBUG] Expired token successfully blacklisted');
-        } catch (e) {
-          console.log('[DEBUG] Failed to blacklist expired token:', e);
+        } catch {
           throw new PhoenixStoreError('Invalid token', 'INVALID_TOKEN');
         }
       } else {
@@ -360,10 +344,8 @@ export class AuthManager {
   }
 
   private async isTokenBlacklisted(token: string): Promise<boolean> {
-    console.log('[DEBUG] Checking if token is blacklisted');
     try {
       const hashedToken = this.hashToken(token);
-      console.log('[DEBUG] Token hashed for blacklist check');
       
       // Add timeout to the blacklist check
       const queryPromise = this.db.query<TokenBlacklist>(this.BLACKLIST_COLLECTION, [
@@ -376,7 +358,6 @@ export class AuthManager {
       });
 
       const blacklistedTokens = await Promise.race([queryPromise, timeoutPromise]);
-      console.log('[DEBUG] Blacklist query result count:', blacklistedTokens.length);
 
       // If we found a token, then check its expiration
       if (blacklistedTokens.length > 0) {
@@ -386,7 +367,6 @@ export class AuthManager {
 
       return false;
     } catch (error) {
-      console.log('[DEBUG] Error checking blacklist:', error);
       // If there's a timeout or other error checking the blacklist, 
       // fail secure by assuming the token is blacklisted
       return true;
@@ -394,15 +374,10 @@ export class AuthManager {
   }
 
   private async blacklistToken(token: string, userId: string, type: 'access' | 'refresh'): Promise<void> {
-    console.log('[DEBUG] Starting blacklistToken');
     const hashedToken = this.hashToken(token);
-    console.log('[DEBUG] Token hashed');
-    
     const expiresAt = type === 'access' 
       ? getExpirationFromDuration(process.env.JWT_ACCESS_EXPIRES_IN || '15m')
       : getExpirationFromDuration(process.env.JWT_REFRESH_EXPIRES_IN || '7d');
-    
-    console.log('[DEBUG] Adding token to blacklist collection');
     
     try {
       // Add to blacklist with unique index on token
@@ -413,10 +388,8 @@ export class AuthManager {
         userId,
         type
       });
-      console.log('[DEBUG] Token added to blacklist successfully');
     } catch (error) {
       // If token already exists in blacklist, that's fine
-      console.log('[DEBUG] Token may already be in blacklist:', error);
     }
   }
 
