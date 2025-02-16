@@ -65,6 +65,27 @@ export class StorageAdapter {
     }
   }
 
+  private normalizeMetadata(metaData: Record<string, string>, originalMetadata: Record<string, string> = {}): Record<string, string> {
+    // Create a map of lowercase keys to original keys
+    const keyMap = Object.keys(originalMetadata).reduce((map, key) => {
+      map[key.toLowerCase()] = key;
+      return map;
+    }, {} as Record<string, string>);
+
+    // Filter out internal metadata and restore original case
+    return Object.entries(metaData).reduce((normalized, [key, value]) => {
+      // Skip internal MinIO metadata
+      if (key.startsWith('x-amz-') || key === 'content-type') {
+        return normalized;
+      }
+      
+      // Use original case if available, otherwise use the key as-is
+      const originalKey = keyMap[key.toLowerCase()] || key;
+      normalized[originalKey] = value;
+      return normalized;
+    }, {} as Record<string, string>);
+  }
+
   /**
    * Upload a file to storage
    * @param file Buffer or string content to upload
@@ -108,7 +129,7 @@ export class StorageAdapter {
         path,
         contentType: stats.metaData['content-type'] || contentType,
         size: stats.size,
-        metadata: stats.metaData,
+        metadata: this.normalizeMetadata(stats.metaData, metadata),
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
         url: `${this.publicUrl}/${bucket}/${path}`
@@ -132,7 +153,7 @@ export class StorageAdapter {
         path,
         contentType: stats.metaData['content-type'] || 'application/octet-stream',
         size: stats.size,
-        metadata: stats.metaData,
+        metadata: this.normalizeMetadata(stats.metaData),
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
         url: `${this.publicUrl}/${bucket}/${path}`
