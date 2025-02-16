@@ -92,6 +92,33 @@ export const swaggerPlugin = swagger({
             }
           }
         },
+        EmailOptions: {
+          type: 'object',
+          required: ['to', 'subject'],
+          properties: {
+            to: {
+              type: 'string',
+              format: 'email',
+              description: 'Recipient email address',
+              example: 'recipient@example.com'
+            },
+            subject: {
+              type: 'string',
+              description: 'Email subject line',
+              example: 'Welcome to PhoenixStore'
+            },
+            text: {
+              type: 'string',
+              description: 'Plain text email content',
+              example: 'This is a plain text email message.'
+            },
+            html: {
+              type: 'string',
+              description: 'HTML formatted email content',
+              example: '<h1>Welcome</h1><p>This is an HTML email message.</p>'
+            }
+          }
+        },
         CreateUserParams: {
           type: 'object',
           required: ['email', 'password'],
