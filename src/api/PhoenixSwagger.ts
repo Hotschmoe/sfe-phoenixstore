@@ -5,14 +5,14 @@ export const swaggerPlugin = swagger({
     info: {
       title: 'PhoenixStore API',
       version: '1.0.0',
-      description: 'MongoDB-based Firestore alternative with familiar syntax'
+      description: 'MongoDB-based Firestore alternative with familiar syntax and Firebase Storage-like file handling'
     },
     tags: [
       { name: 'Documents', description: 'Document operations' },
       { name: 'Queries', description: 'Query operations' },
       { name: 'Authentication', description: 'User authentication and management' },
       { name: 'Email', description: 'Email verification and password reset' },
-      { name: 'Storage', description: 'File storage operations' }
+      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' }
     ],
     components: {
       schemas: {
@@ -307,12 +307,12 @@ export const swaggerPlugin = swagger({
             },
             bucket: {
               type: 'string',
-              description: 'Bucket name',
-              example: 'avatars'
+              description: 'Storage bucket name (default: phoenixstore)',
+              example: 'phoenixstore'
             },
             path: {
               type: 'string',
-              description: 'Full path in bucket',
+              description: 'Full path in storage (Firebase-like path structure)',
               example: 'users/123/profile.jpg'
             },
             contentType: {
@@ -349,18 +349,13 @@ export const swaggerPlugin = swagger({
             url: {
               type: 'string',
               description: 'Public URL',
-              example: 'http://storage.example.com/avatars/users/123/profile.jpg'
+              example: 'http://storage.example.com/phoenixstore/users/123/profile.jpg'
             }
           }
         },
         UploadOptions: {
           type: 'object',
           properties: {
-            bucket: {
-              type: 'string',
-              description: 'Target bucket (defaults to uploads)',
-              example: 'avatars'
-            },
             contentType: {
               type: 'string',
               description: 'Override content type',
@@ -382,11 +377,6 @@ export const swaggerPlugin = swagger({
         PresignedUrlOptions: {
           type: 'object',
           properties: {
-            bucket: {
-              type: 'string',
-              description: 'Target bucket (defaults to uploads)',
-              example: 'avatars'
-            },
             contentType: {
               type: 'string',
               description: 'Override content type',

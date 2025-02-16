@@ -96,10 +96,8 @@ services:
     entrypoint: >
       /bin/sh -c "
       /usr/bin/mc config host add myminio http://minio:9000 ${STORAGE_ACCESS_KEY} ${STORAGE_SECRET_KEY};
-      /usr/bin/mc mb myminio/avatars;
-      /usr/bin/mc mb myminio/uploads;
-      /usr/bin/mc anonymous set public myminio/avatars;
-      /usr/bin/mc anonymous set public myminio/uploads;
+      /usr/bin/mc mb myminio/phoenixstore;
+      /usr/bin/mc anonymous set public myminio/phoenixstore;
       exit 0;
       "
 

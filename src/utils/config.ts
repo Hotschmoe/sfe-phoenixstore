@@ -27,11 +27,8 @@ interface Config {
   STORAGE_USE_SSL: boolean;
   STORAGE_REGION: string;
   STORAGE_PUBLIC_URL: string;
-  // Predefined bucket names
-  STORAGE_BUCKETS: {
-    AVATARS: string;
-    UPLOADS: string;
-  };
+  // Default bucket name
+  STORAGE_BUCKET: string;
 }
 
 // Development defaults - DO NOT use in production
@@ -130,9 +127,6 @@ export const config: Config = {
   STORAGE_USE_SSL: process.env.STORAGE_USE_SSL === 'true',
   STORAGE_REGION: process.env.STORAGE_REGION || devDefaults.STORAGE_REGION,
   STORAGE_PUBLIC_URL: process.env.STORAGE_PUBLIC_URL || devDefaults.STORAGE_PUBLIC_URL,
-  // Predefined bucket names (Firebase-like structure)
-  STORAGE_BUCKETS: {
-    AVATARS: 'avatars',
-    UPLOADS: 'uploads'
-  }
+  // Default bucket name
+  STORAGE_BUCKET: 'phoenixstore'
 };

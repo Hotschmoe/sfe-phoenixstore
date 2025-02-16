@@ -16,7 +16,7 @@ interface StorageConfig {
 
 export class StorageAdapter {
   private client: Client;
-  private readonly defaultBucket = config.STORAGE_BUCKETS.UPLOADS;
+  private readonly defaultBucket: string;
   private readonly publicUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {
@@ -31,37 +31,31 @@ export class StorageAdapter {
 
     this.client = new Client(finalConfig);
     this.publicUrl = customConfig?.publicUrl || config.STORAGE_PUBLIC_URL;
+    this.defaultBucket = config.STORAGE_BUCKET;
 
-    // Ensure buckets exist on initialization
-    this.initializeBuckets().catch(error => {
-      console.error('Failed to initialize buckets:', error);
+    // Ensure bucket exists on initialization
+    this.initializeBucket().catch(error => {
+      console.error('Failed to initialize bucket:', error);
     });
   }
 
-  private async initializeBuckets(): Promise<void> {
-    const requiredBuckets = [
-      config.STORAGE_BUCKETS.UPLOADS,
-      config.STORAGE_BUCKETS.AVATARS
-    ];
-
-    for (const bucket of requiredBuckets) {
-      const exists = await this.client.bucketExists(bucket);
-      if (!exists) {
-        await this.client.makeBucket(bucket, config.STORAGE_REGION);
-        // Make bucket public
-        const policy = {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { AWS: ['*'] },
-              Action: ['s3:GetObject'],
-              Resource: [`arn:aws:s3:::${bucket}/*`]
-            }
-          ]
-        };
-        await this.client.setBucketPolicy(bucket, JSON.stringify(policy));
-      }
+  private async initializeBucket(): Promise<void> {
+    const exists = await this.client.bucketExists(this.defaultBucket);
+    if (!exists) {
+      await this.client.makeBucket(this.defaultBucket, config.STORAGE_REGION);
+      // Make bucket public
+      const policy = {
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: { AWS: ['*'] },
+            Action: ['s3:GetObject'],
+            Resource: [`arn:aws:s3:::${this.defaultBucket}/*`]
+          }
+        ]
+      };
+      await this.client.setBucketPolicy(this.defaultBucket, JSON.stringify(policy));
     }
   }
 
