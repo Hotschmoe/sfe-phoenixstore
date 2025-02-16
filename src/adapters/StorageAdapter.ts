@@ -1,8 +1,7 @@
 import { Client } from 'minio';
-import { StorageFile, UploadOptions, PresignedUrlOptions, StorageError } from '../types/storage';
+import { StorageFile, UploadOptions, PresignedUrlOptions } from '../types/storage';
 import { config } from '../utils/config';
 import { PhoenixStoreError } from '../types';
-import { randomBytes } from 'crypto';
 import { extname } from 'path';
 
 interface StorageConfig {
@@ -68,30 +67,24 @@ export class StorageAdapter {
 
   /**
    * Upload a file to storage
+   * @param file Buffer or string content to upload
+   * @param path Full path including filename (e.g., 'images/profile.jpg')
+   * @param options Upload options
    */
   async uploadFile(
     file: Buffer | string,
-    fileName: string,
+    path: string,
     options: UploadOptions = {}
   ): Promise<StorageFile> {
     try {
       const bucket = options.bucket || this.defaultBucket;
-      const fileId = this.generateFileId();
-      const ext = extname(fileName);
-      const path = options.path 
-        ? `${options.path}/${fileId}${ext}`
-        : `${fileId}${ext}`;
-
-      // Store original filename in metadata
-      const metadata = {
-        'Original-Filename': fileName,
-        ...options.metadata
-      };
+      const contentType = options.contentType || this.getContentType(path);
+      const metadata = options.metadata || {};
 
       // Ensure bucket exists
       const bucketExists = await this.client.bucketExists(bucket);
       if (!bucketExists) {
-        throw new PhoenixStoreError('Bucket not found', 'BUCKET_NOT_FOUND');
+        throw new PhoenixStoreError('storage/bucket-not-found', 'Specified bucket does not exist');
       }
 
       // Upload file
@@ -101,34 +94,85 @@ export class StorageAdapter {
         file,
         file instanceof Buffer ? file.length : Buffer.from(file).length,
         {
-          'Content-Type': options.contentType || this.getContentType(fileName),
+          'Content-Type': contentType,
           ...metadata
         }
       );
 
-      // Generate file info
+      // Get file stats
       const stats = await this.client.statObject(bucket, path);
-      const url = options.public 
-        ? `${this.publicUrl}/${bucket}/${path}`
-        : '';
+      
+      return {
+        name: path.split('/').pop() || path,
+        bucket,
+        path,
+        contentType: stats.metaData['content-type'] || contentType,
+        size: stats.size,
+        metadata: stats.metaData,
+        createdAt: stats.lastModified.toISOString(),
+        updatedAt: stats.lastModified.toISOString(),
+        url: `${this.publicUrl}/${bucket}/${path}`
+      };
+    } catch (error: any) {
+      if (error instanceof PhoenixStoreError) throw error;
+      throw new PhoenixStoreError('storage/upload-failed', `Failed to upload file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get file information
+   */
+  async getFileInfo(bucket: string, path: string): Promise<StorageFile> {
+    try {
+      const stats = await this.client.statObject(bucket, path);
 
       return {
-        id: fileId,
-        name: fileName,  // Use original filename
+        name: path.split('/').pop() || path,
         bucket,
         path,
         contentType: stats.metaData['content-type'] || 'application/octet-stream',
         size: stats.size,
-        metadata,
+        metadata: stats.metaData,
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
-        url
+        url: `${this.publicUrl}/${bucket}/${path}`
       };
     } catch (error: any) {
-      throw new PhoenixStoreError(
-        `Failed to upload file: ${error.message}`,
-        'UPLOAD_ERROR'
-      );
+      if (error.code === 'NotFound') {
+        throw new PhoenixStoreError('storage/object-not-found', 'File does not exist');
+      }
+      throw new PhoenixStoreError('storage/unknown', `Failed to get file info: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete a file from storage
+   */
+  async deleteFile(bucket: string, path: string): Promise<void> {
+    try {
+      // Check if file exists first
+      await this.client.statObject(bucket, path);
+      await this.client.removeObject(bucket, path);
+    } catch (error: any) {
+      if (error.code === 'NotFound') {
+        throw new PhoenixStoreError('storage/object-not-found', 'File does not exist');
+      }
+      throw new PhoenixStoreError('storage/unknown', `Failed to delete file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate a presigned URL for file download
+   */
+  async getPresignedDownloadUrl(
+    bucket: string,
+    path: string,
+    expires: number = 3600
+  ): Promise<string> {
+    try {
+      return await this.client.presignedGetObject(bucket, path, expires);
+    } catch (error: any) {
+      throw new PhoenixStoreError('storage/invalid-url', `Failed to generate download URL: ${error.message}`);
     }
   }
 
@@ -136,18 +180,12 @@ export class StorageAdapter {
    * Generate a presigned URL for file upload
    */
   async getPresignedUploadUrl(
-    fileName: string,
+    path: string,
     options: PresignedUrlOptions = {}
   ): Promise<{ url: string; fields: Record<string, string> }> {
     try {
       const bucket = options.bucket || this.defaultBucket;
-      const fileId = this.generateFileId();
-      const ext = extname(fileName);
-      const path = options.path 
-        ? `${options.path}/${fileId}${ext}`
-        : `${fileId}${ext}`;
-
-      const contentType = options.contentType || this.getContentType(fileName);
+      const contentType = options.contentType || this.getContentType(path);
       const expirySeconds = options.expires || 3600;
 
       // Create post policy
@@ -169,82 +207,8 @@ export class StorageAdapter {
         }
       };
     } catch (error: any) {
-      throw new PhoenixStoreError(
-        `Failed to generate presigned URL: ${error.message}`,
-        'STORAGE_ERROR'
-      );
+      throw new PhoenixStoreError('storage/invalid-url', `Failed to generate upload URL: ${error.message}`);
     }
-  }
-
-  /**
-   * Delete a file from storage
-   */
-  async deleteFile(bucket: string, path: string): Promise<void> {
-    try {
-      await this.client.removeObject(bucket, path);
-    } catch (error: any) {
-      if (error.code === 'NoSuchKey' || error.code === 'NotFound') {
-        throw new PhoenixStoreError('File not found', 'FILE_NOT_FOUND');
-      }
-      throw new PhoenixStoreError(
-        `Failed to delete file: ${error.message}`,
-        'DELETE_ERROR'
-      );
-    }
-  }
-
-  /**
-   * Get file information
-   */
-  async getFileInfo(bucket: string, path: string): Promise<StorageFile> {
-    try {
-      const stats = await this.client.statObject(bucket, path);
-      const fileId = path.split('/').pop()?.split('.')[0] || '';
-      const originalName = stats.metaData['original-filename'] || path.split('/').pop() || '';
-
-      return {
-        id: fileId,
-        name: originalName,
-        bucket,
-        path,
-        contentType: stats.metaData['content-type'] || 'application/octet-stream',
-        size: stats.size,
-        metadata: stats.metaData,
-        createdAt: stats.lastModified.toISOString(),
-        updatedAt: stats.lastModified.toISOString(),
-        url: `${this.publicUrl}/${bucket}/${path}`
-      };
-    } catch (error: any) {
-      if (error.code === 'NotFound') {
-        throw new PhoenixStoreError('File not found', 'FILE_NOT_FOUND');
-      }
-      throw new PhoenixStoreError(
-        `Failed to get file info: ${error.message}`,
-        'FILE_NOT_FOUND'
-      );
-    }
-  }
-
-  /**
-   * Generate a presigned URL for file download
-   */
-  async getPresignedDownloadUrl(
-    bucket: string,
-    path: string,
-    expires: number = 3600
-  ): Promise<string> {
-    try {
-      return await this.client.presignedGetObject(bucket, path, expires);
-    } catch (error: any) {
-      throw new PhoenixStoreError(
-        `Failed to generate download URL: ${error.message}`,
-        'STORAGE_ERROR'
-      );
-    }
-  }
-
-  private generateFileId(): string {
-    return randomBytes(16).toString('hex');
   }
 
   private getContentType(fileName: string): string {

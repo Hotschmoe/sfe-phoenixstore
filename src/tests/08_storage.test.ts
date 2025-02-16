@@ -5,7 +5,7 @@ import { config } from '../utils/config';
 
 describe('Storage', () => {
   let storage: StorageAdapter;
-  const testFileName = 'test-file.txt';
+  const testFilePath = 'test/file.txt';
   const testFileContent = 'Hello, World!';
   let uploadedFilePath: string;
   let uploadedBucket: string;
@@ -36,17 +36,17 @@ describe('Storage', () => {
   });
 
   describe('File Upload', () => {
-    test('should upload a file to default bucket', async () => {
+    test('should upload a file to default bucket with path', async () => {
       const file = Buffer.from(testFileContent);
-      const result = await storage.uploadFile(file, testFileName);
+      const result = await storage.uploadFile(file, testFilePath);
 
       expect(result).toBeDefined();
-      expect(result.name).toBe(testFileName);
+      expect(result.name).toBe('file.txt');
       expect(result.bucket).toBe(config.STORAGE_BUCKETS.UPLOADS);
+      expect(result.path).toBe(testFilePath);
       expect(result.contentType).toBe('text/plain');
       expect(result.size).toBe(testFileContent.length);
-      expect(result.path).toBeDefined();
-      expect(result.id).toBeDefined();
+      expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
 
       // Store for cleanup
       uploadedFilePath = result.path;
@@ -55,22 +55,22 @@ describe('Storage', () => {
 
     test('should upload a file with custom options', async () => {
       const file = Buffer.from(testFileContent);
+      const customPath = 'custom/path/custom-file.txt';
       const options = {
         bucket: config.STORAGE_BUCKETS.AVATARS,
-        path: 'custom/path',
+        contentType: 'application/custom',
         metadata: {
           userId: '123',
           purpose: 'test'
-        },
-        contentType: 'application/custom',
-        public: true
+        }
       };
 
-      const result = await storage.uploadFile(file, testFileName, options);
+      const result = await storage.uploadFile(file, customPath, options);
 
       expect(result).toBeDefined();
+      expect(result.name).toBe('custom-file.txt');
       expect(result.bucket).toBe(options.bucket);
-      expect(result.path).toContain(options.path);
+      expect(result.path).toBe(customPath);
       expect(result.contentType).toBe(options.contentType);
       expect(result.metadata).toEqual(options.metadata);
       expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
@@ -85,8 +85,19 @@ describe('Storage', () => {
         bucket: 'nonexistent-bucket'
       };
 
-      await expect(storage.uploadFile(file, testFileName, options))
-        .rejects.toThrow('Bucket not found');
+      await expect(storage.uploadFile(file, testFilePath, options))
+        .rejects.toThrow('storage/bucket-not-found');
+    });
+
+    test('should handle special characters in path', async () => {
+      const file = Buffer.from(testFileContent);
+      const pathWithSpecialChars = 'test/special@#$%/file.txt';
+
+      const result = await storage.uploadFile(file, pathWithSpecialChars);
+      expect(result.path).toBe(pathWithSpecialChars);
+
+      // Clean up
+      await storage.deleteFile(result.bucket, result.path);
     });
   });
 
@@ -95,7 +106,8 @@ describe('Storage', () => {
       const fileInfo = await storage.getFileInfo(uploadedBucket, uploadedFilePath);
 
       expect(fileInfo).toBeDefined();
-      expect(fileInfo.name).toBe(testFileName);
+      expect(fileInfo.name).toBe('file.txt');
+      expect(fileInfo.path).toBe(uploadedFilePath);
       expect(fileInfo.size).toBe(testFileContent.length);
       expect(fileInfo.contentType).toBe('text/plain');
     });
@@ -109,25 +121,37 @@ describe('Storage', () => {
     });
 
     test('should generate presigned upload URL', async () => {
-      const { url, fields } = await storage.getPresignedUploadUrl('new-file.txt');
+      const uploadPath = 'test/presigned-upload.txt';
+      const { url, fields } = await storage.getPresignedUploadUrl(uploadPath);
 
       expect(url).toBeDefined();
       expect(fields).toBeDefined();
-      expect(fields['bucket']).toBeDefined();
-      expect(fields['key']).toBeDefined();
+      expect(fields.bucket).toBe(config.STORAGE_BUCKETS.UPLOADS);
+      expect(fields.key).toBe(uploadPath);
+    });
+
+    test('should handle file not found errors', async () => {
+      const nonexistentPath = 'nonexistent/file.txt';
+      
+      await expect(storage.getFileInfo(uploadedBucket, nonexistentPath))
+        .rejects.toThrow('storage/object-not-found');
+        
+      await expect(storage.deleteFile(uploadedBucket, nonexistentPath))
+        .rejects.toThrow('storage/object-not-found');
     });
 
     test('should delete file', async () => {
       // Upload a new file for deletion
       const file = Buffer.from('Delete me');
-      const result = await storage.uploadFile(file, 'delete-test.txt');
+      const deletePath = 'test/delete-test.txt';
+      const result = await storage.uploadFile(file, deletePath);
 
       // Delete the file
       await storage.deleteFile(result.bucket, result.path);
 
       // Verify file is deleted
       await expect(storage.getFileInfo(result.bucket, result.path))
-        .rejects.toThrow('FILE_NOT_FOUND');
+        .rejects.toThrow('storage/object-not-found');
     });
   });
 }); 

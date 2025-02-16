@@ -1,6 +1,5 @@
 export interface StorageFile {
-  id: string;           // Unique file identifier
-  name: string;         // Original file name
+  name: string;         // File name from path
   bucket: string;       // Bucket name
   path: string;         // Full path in bucket
   contentType: string;  // MIME type
@@ -10,22 +9,30 @@ export interface StorageFile {
   };
   createdAt: string;    // ISO date string
   updatedAt: string;    // ISO date string
-  url: string;          // Public URL (if available)
+  url: string;          // Public URL
 }
 
 export interface UploadOptions {
   bucket?: string;      // Target bucket (defaults to 'uploads')
-  path?: string;        // Custom path within bucket
+  contentType?: string; // Override content type
   metadata?: {          // Custom metadata
     [key: string]: string;
   };
-  contentType?: string; // Override content type
-  public?: boolean;     // Make file publicly accessible
 }
 
-export interface PresignedUrlOptions extends UploadOptions {
+export interface PresignedUrlOptions {
+  bucket?: string;      // Target bucket (defaults to 'uploads')
+  contentType?: string; // Override content type
   expires?: number;     // URL expiration in seconds
 }
+
+// Firebase-like error codes
+export type StorageErrorCode = 
+  | 'storage/unknown'
+  | 'storage/object-not-found'
+  | 'storage/bucket-not-found'
+  | 'storage/upload-failed'
+  | 'storage/invalid-url';
 
 export interface StorageError {
   code: 
