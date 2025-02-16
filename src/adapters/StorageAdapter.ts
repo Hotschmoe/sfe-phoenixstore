@@ -252,4 +252,100 @@ export class StorageAdapter {
 
     return mimeTypes[ext] || 'application/octet-stream';
   }
+
+  /**
+   * List all files and prefixes (folders) at a given path
+   * @param prefix Directory path to list from (e.g., 'users/' or 'users/123/images/')
+   */
+  async listAll(prefix: string = ''): Promise<{ files: StorageFile[]; prefixes: string[] }> {
+    try {
+      const bucket = this.defaultBucket;
+      const stream = this.client.listObjectsV2(bucket, prefix, true);
+      
+      const files: StorageFile[] = [];
+      const prefixSet = new Set<string>();
+
+      for await (const item of stream) {
+        // Get file info
+        const fileInfo = await this.getFileInfo(bucket, item.name);
+        files.push(fileInfo);
+
+        // Extract prefixes (folders)
+        const parts = item.name.split('/');
+        if (parts.length > 1) {
+          // Add all parent folders
+          for (let i = 0; i < parts.length - 1; i++) {
+            const prefix = parts.slice(0, i + 1).join('/') + '/';
+            if (prefix.startsWith(prefix)) {
+              prefixSet.add(prefix);
+            }
+          }
+        }
+      }
+
+      return {
+        files,
+        prefixes: Array.from(prefixSet)
+      };
+    } catch (error: any) {
+      throw new PhoenixStoreError('storage/unknown', `Failed to list files: ${error.message}`);
+    }
+  }
+
+  /**
+   * List files and prefixes with pagination
+   * @param prefix Directory path to list from
+   * @param options Pagination options
+   */
+  async list(prefix: string = '', options: { maxResults?: number; pageToken?: string } = {}): Promise<{
+    files: StorageFile[];
+    prefixes: string[];
+    nextPageToken?: string;
+  }> {
+    try {
+      const bucket = this.defaultBucket;
+      const maxResults = options.maxResults || 1000;
+      
+      // Use pageToken as startAfter if provided
+      const stream = this.client.listObjectsV2(bucket, prefix, true, options.pageToken);
+      
+      const files: StorageFile[] = [];
+      const prefixSet = new Set<string>();
+      let nextMarker: string | undefined;
+      let count = 0;
+      let skipCount = 0;
+
+      for await (const item of stream) {
+        // Get file info
+        const fileInfo = await this.getFileInfo(bucket, item.name);
+        files.push(fileInfo);
+        count++;
+
+        if (count >= maxResults) {
+          nextMarker = item.name;
+          break;
+        }
+
+        // Extract prefixes (folders)
+        const parts = item.name.split('/');
+        if (parts.length > 1) {
+          // Add all parent folders
+          for (let i = 0; i < parts.length - 1; i++) {
+            const prefix = parts.slice(0, i + 1).join('/') + '/';
+            if (prefix.startsWith(prefix)) {
+              prefixSet.add(prefix);
+            }
+          }
+        }
+      }
+
+      return {
+        files,
+        prefixes: Array.from(prefixSet),
+        ...(nextMarker && { nextPageToken: nextMarker })
+      };
+    } catch (error: any) {
+      throw new PhoenixStoreError('storage/unknown', `Failed to list files: ${error.message}`);
+    }
+  }
 } 

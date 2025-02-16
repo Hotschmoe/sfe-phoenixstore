@@ -353,6 +353,46 @@ export const swaggerPlugin = swagger({
             }
           }
         },
+        StorageListResult: {
+          type: 'object',
+          properties: {
+            files: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/StorageFile'
+              },
+              description: 'Array of files in the current directory'
+            },
+            prefixes: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              description: 'Array of folder paths (prefixes)',
+              example: ['users/', 'users/123/images/']
+            },
+            nextPageToken: {
+              type: 'string',
+              description: 'Token for retrieving the next page of results',
+              example: 'users/123/profile.jpg'
+            }
+          }
+        },
+        StorageListOptions: {
+          type: 'object',
+          properties: {
+            maxResults: {
+              type: 'number',
+              description: 'Maximum number of results to return',
+              example: 1000
+            },
+            pageToken: {
+              type: 'string',
+              description: 'Page token from a previous list operation',
+              example: 'users/123/profile.jpg'
+            }
+          }
+        },
         UploadOptions: {
           type: 'object',
           properties: {

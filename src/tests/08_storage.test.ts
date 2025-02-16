@@ -141,4 +141,105 @@ describe('Storage', () => {
         .rejects.toThrow('storage/object-not-found');
     });
   });
+
+  describe('List Operations', () => {
+    beforeAll(async () => {
+      // Upload test files in different paths
+      const testFiles = [
+        'folder1/file1.txt',
+        'folder1/file2.txt',
+        'folder1/subfolder/file3.txt',
+        'folder2/file4.txt'
+      ];
+
+      for (const path of testFiles) {
+        await storage.uploadFile(Buffer.from(`Content of ${path}`), path);
+      }
+    });
+
+    afterAll(async () => {
+      // Clean up test files
+      const testFiles = [
+        'folder1/file1.txt',
+        'folder1/file2.txt',
+        'folder1/subfolder/file3.txt',
+        'folder2/file4.txt'
+      ];
+
+      for (const path of testFiles) {
+        try {
+          await storage.deleteFile(config.STORAGE_BUCKET, path);
+        } catch (error) {
+          console.warn(`Failed to delete test file ${path}:`, error);
+        }
+      }
+    });
+
+    test('should list all files and folders', async () => {
+      const result = await storage.listAll();
+      
+      expect(result.files.length).toBeGreaterThanOrEqual(4); // Our test files
+      expect(result.prefixes).toContain('folder1/');
+      expect(result.prefixes).toContain('folder2/');
+      expect(result.prefixes).toContain('folder1/subfolder/');
+      
+      // Verify file contents
+      const fileNames = result.files.map(f => f.path);
+      expect(fileNames).toContain('folder1/file1.txt');
+      expect(fileNames).toContain('folder1/file2.txt');
+      expect(fileNames).toContain('folder1/subfolder/file3.txt');
+      expect(fileNames).toContain('folder2/file4.txt');
+    });
+
+    test('should list files in specific folder', async () => {
+      const result = await storage.listAll('folder1/');
+      
+      expect(result.files.length).toBeGreaterThanOrEqual(3); // Files in folder1
+      expect(result.prefixes).toContain('folder1/subfolder/');
+      
+      const fileNames = result.files.map(f => f.path);
+      expect(fileNames).toContain('folder1/file1.txt');
+      expect(fileNames).toContain('folder1/file2.txt');
+      expect(fileNames).toContain('folder1/subfolder/file3.txt');
+      expect(fileNames).not.toContain('folder2/file4.txt');
+    });
+
+    test('should list files with pagination', async () => {
+      // First page (2 results)
+      const page1 = await storage.list('', { maxResults: 2 });
+      expect(page1.files.length).toBe(2);
+      expect(page1.nextPageToken).toBeDefined();
+
+      // Second page
+      const page2 = await storage.list('', { 
+        maxResults: 2,
+        pageToken: page1.nextPageToken
+      });
+      expect(page2.files.length).toBeGreaterThanOrEqual(1);
+      
+      // Get all files for comparison
+      const allFiles = await storage.listAll();
+      const allPaths = new Set(allFiles.files.map(f => f.path));
+      
+      // Verify all returned files exist in the complete set
+      const page1Paths = new Set(page1.files.map(f => f.path));
+      const page2Paths = new Set(page2.files.map(f => f.path));
+      
+      // Each file from pages should exist in complete set
+      for (const path of page1Paths) {
+        expect(allPaths.has(path)).toBe(true);
+      }
+      for (const path of page2Paths) {
+        expect(allPaths.has(path)).toBe(true);
+      }
+      
+      // No duplicates between pages
+      const intersection = [...page1Paths].filter(x => page2Paths.has(x));
+      expect(intersection.length).toBe(0);
+      
+      // Total number of files returned should match maxResults
+      expect(page1.files.length).toBe(2); // First page full
+      expect(page2.files.length).toBeGreaterThanOrEqual(1); // At least one in second page
+    });
+  });
 }); 
