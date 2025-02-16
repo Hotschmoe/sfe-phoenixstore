@@ -5,13 +5,14 @@ export const swaggerPlugin = swagger({
     info: {
       title: 'PhoenixStore API',
       version: '1.0.0',
-      description: 'MongoDB-based Firestore alternative with familiar syntax'
+      description: 'MongoDB-based Firestore alternative with familiar syntax and Firebase Storage-like file handling'
     },
     tags: [
       { name: 'Documents', description: 'Document operations' },
       { name: 'Queries', description: 'Query operations' },
       { name: 'Authentication', description: 'User authentication and management' },
-      { name: 'Email', description: 'Email verification and password reset' }
+      { name: 'Email', description: 'Email verification and password reset' },
+      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' }
     ],
     components: {
       schemas: {
@@ -293,6 +294,158 @@ export const swaggerPlugin = swagger({
                 },
                 additionalProperties: true
               }
+            }
+          }
+        },
+        StorageFile: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'File name from path',
+              example: 'profile.jpg'
+            },
+            bucket: {
+              type: 'string',
+              description: 'Storage bucket name (default: phoenixstore)',
+              example: 'phoenixstore'
+            },
+            path: {
+              type: 'string',
+              description: 'Full path in storage (Firebase-like path structure)',
+              example: 'users/123/profile.jpg'
+            },
+            contentType: {
+              type: 'string',
+              description: 'MIME type',
+              example: 'image/jpeg'
+            },
+            size: {
+              type: 'number',
+              description: 'File size in bytes',
+              example: 1024
+            },
+            metadata: {
+              type: 'object',
+              description: 'Custom metadata',
+              additionalProperties: {
+                type: 'string'
+              },
+              example: {
+                userId: '123',
+                purpose: 'profile'
+              }
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Creation timestamp'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Last modification timestamp'
+            },
+            url: {
+              type: 'string',
+              description: 'Public URL',
+              example: 'http://storage.example.com/phoenixstore/users/123/profile.jpg'
+            }
+          }
+        },
+        StorageListResult: {
+          type: 'object',
+          properties: {
+            files: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/StorageFile'
+              },
+              description: 'Array of files in the current directory'
+            },
+            prefixes: {
+              type: 'array',
+              items: {
+                type: 'string'
+              },
+              description: 'Array of folder paths (prefixes)',
+              example: ['users/', 'users/123/images/']
+            },
+            nextPageToken: {
+              type: 'string',
+              description: 'Token for retrieving the next page of results',
+              example: 'users/123/profile.jpg'
+            }
+          }
+        },
+        StorageListOptions: {
+          type: 'object',
+          properties: {
+            maxResults: {
+              type: 'number',
+              description: 'Maximum number of results to return',
+              example: 1000
+            },
+            pageToken: {
+              type: 'string',
+              description: 'Page token from a previous list operation',
+              example: 'users/123/profile.jpg'
+            }
+          }
+        },
+        UploadOptions: {
+          type: 'object',
+          properties: {
+            contentType: {
+              type: 'string',
+              description: 'Override content type',
+              example: 'image/jpeg'
+            },
+            metadata: {
+              type: 'object',
+              description: 'Custom metadata',
+              additionalProperties: {
+                type: 'string'
+              },
+              example: {
+                userId: '123',
+                purpose: 'profile'
+              }
+            }
+          }
+        },
+        PresignedUrlOptions: {
+          type: 'object',
+          properties: {
+            contentType: {
+              type: 'string',
+              description: 'Override content type',
+              example: 'image/jpeg'
+            },
+            expires: {
+              type: 'number',
+              description: 'URL expiration in seconds',
+              example: 3600
+            }
+          }
+        },
+        StorageError: {
+          type: 'object',
+          properties: {
+            code: {
+              type: 'string',
+              enum: [
+                'storage/unknown',
+                'storage/object-not-found',
+                'storage/bucket-not-found',
+                'storage/upload-failed',
+                'storage/invalid-url'
+              ],
+              example: 'storage/object-not-found'
+            },
+            message: {
+              type: 'string',
+              example: 'File does not exist'
             }
           }
         }

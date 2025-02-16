@@ -19,6 +19,16 @@ interface Config {
   SMTP_PASS: string;
   SMTP_FROM_EMAIL: string;
   SMTP_FROM_NAME: string;
+  // Storage Configuration
+  STORAGE_ENDPOINT: string;
+  STORAGE_PORT: number;
+  STORAGE_ACCESS_KEY: string;
+  STORAGE_SECRET_KEY: string;
+  STORAGE_USE_SSL: boolean;
+  STORAGE_REGION: string;
+  STORAGE_PUBLIC_URL: string;
+  // Default bucket name
+  STORAGE_BUCKET: string;
 }
 
 // Development defaults - DO NOT use in production
@@ -37,7 +47,15 @@ const devDefaults = {
   SMTP_USER: 'test-user',
   SMTP_PASS: 'test-pass',
   SMTP_FROM_EMAIL: 'noreply@example.com',
-  SMTP_FROM_NAME: 'PhoenixStore'
+  SMTP_FROM_NAME: 'PhoenixStore',
+  // Storage defaults for development
+  STORAGE_ENDPOINT: 'localhost',
+  STORAGE_PORT: '9000',
+  STORAGE_ACCESS_KEY: 'minioadmin',
+  STORAGE_SECRET_KEY: 'minioadmin',
+  STORAGE_USE_SSL: false,
+  STORAGE_REGION: 'us-east-1',
+  STORAGE_PUBLIC_URL: 'http://localhost:9000'
 } as const;
 
 // Helper to build MongoDB URI
@@ -60,6 +78,12 @@ const validateProductionConfig = () => {
     if (!process.env.SMTP_USER) missingVars.push('SMTP_USER');
     if (!process.env.SMTP_PASS) missingVars.push('SMTP_PASS');
     if (!process.env.SMTP_FROM_EMAIL) missingVars.push('SMTP_FROM_EMAIL');
+    // Storage validation
+    if (!process.env.STORAGE_ENDPOINT) missingVars.push('STORAGE_ENDPOINT');
+    if (!process.env.STORAGE_PORT) missingVars.push('STORAGE_PORT');
+    if (!process.env.STORAGE_ACCESS_KEY) missingVars.push('STORAGE_ACCESS_KEY');
+    if (!process.env.STORAGE_SECRET_KEY) missingVars.push('STORAGE_SECRET_KEY');
+    if (!process.env.STORAGE_PUBLIC_URL) missingVars.push('STORAGE_PUBLIC_URL');
     
     if (missingVars.length > 0) {
       console.warn(`⚠️  Warning: Missing required environment variables in production: ${missingVars.join(', ')}`);
@@ -95,4 +119,14 @@ export const config: Config = {
   SMTP_PASS: process.env.SMTP_PASS || devDefaults.SMTP_PASS,
   SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || devDefaults.SMTP_FROM_EMAIL,
   SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || devDefaults.SMTP_FROM_NAME,
+  // Storage Configuration
+  STORAGE_ENDPOINT: process.env.STORAGE_ENDPOINT || devDefaults.STORAGE_ENDPOINT,
+  STORAGE_PORT: parseInt(process.env.STORAGE_PORT || devDefaults.STORAGE_PORT, 10),
+  STORAGE_ACCESS_KEY: process.env.STORAGE_ACCESS_KEY || devDefaults.STORAGE_ACCESS_KEY,
+  STORAGE_SECRET_KEY: process.env.STORAGE_SECRET_KEY || devDefaults.STORAGE_SECRET_KEY,
+  STORAGE_USE_SSL: process.env.STORAGE_USE_SSL === 'true',
+  STORAGE_REGION: process.env.STORAGE_REGION || devDefaults.STORAGE_REGION,
+  STORAGE_PUBLIC_URL: process.env.STORAGE_PUBLIC_URL || devDefaults.STORAGE_PUBLIC_URL,
+  // Default bucket name
+  STORAGE_BUCKET: 'phoenixstore'
 };
