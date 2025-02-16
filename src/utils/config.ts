@@ -12,7 +12,13 @@ interface Config {
   MONGODB_PORT: string;
   API_URL: string;
   PORT: number;
-  // NODE_ENV: string; // this should be set by Dockerfile
+  // SMTP Configuration
+  SMTP_HOST: string;
+  SMTP_PORT: number;
+  SMTP_USER: string;
+  SMTP_PASS: string;
+  SMTP_FROM_EMAIL: string;
+  SMTP_FROM_NAME: string;
 }
 
 // Development defaults - DO NOT use in production
@@ -24,7 +30,14 @@ const devDefaults = {
   MONGODB_PASSWORD: 'phoenixpass',
   PORT: '3000',
   // NODE_ENV: 'development', this should be set by Dockerfile
-  API_URL: 'http://localhost:3000'
+  API_URL: 'http://localhost:3000',
+  // SMTP defaults for development
+  SMTP_HOST: 'smtp.example.com',
+  SMTP_PORT: '587',
+  SMTP_USER: 'test-user',
+  SMTP_PASS: 'test-pass',
+  SMTP_FROM_EMAIL: 'noreply@example.com',
+  SMTP_FROM_NAME: 'PhoenixStore'
 } as const;
 
 // Helper to build MongoDB URI
@@ -41,6 +54,12 @@ const validateProductionConfig = () => {
     if (!process.env.MONGODB_USER) missingVars.push('MONGODB_USER');
     if (!process.env.MONGODB_PASSWORD) missingVars.push('MONGODB_PASSWORD');
     if (!process.env.PHOENIXSTORE_API_URL) missingVars.push('PHOENIXSTORE_API_URL');
+    // SMTP validation
+    if (!process.env.SMTP_HOST) missingVars.push('SMTP_HOST');
+    if (!process.env.SMTP_PORT) missingVars.push('SMTP_PORT');
+    if (!process.env.SMTP_USER) missingVars.push('SMTP_USER');
+    if (!process.env.SMTP_PASS) missingVars.push('SMTP_PASS');
+    if (!process.env.SMTP_FROM_EMAIL) missingVars.push('SMTP_FROM_EMAIL');
     
     if (missingVars.length > 0) {
       console.warn(`⚠️  Warning: Missing required environment variables in production: ${missingVars.join(', ')}`);
@@ -69,4 +88,11 @@ export const config: Config = {
   API_URL: process.env.PHOENIXSTORE_API_URL ? `${process.env.PHOENIXSTORE_API_URL}:${process.env.PHOENIXSTORE_PORT}` : devDefaults.API_URL,
   PORT: parseInt(process.env.PHOENIXSTORE_PORT || devDefaults.PORT, 10),
   // NODE_ENV: process.env.PHOENIXSTORE_ENV || devDefaults.NODE_ENV, // this should be set by Dockerfile
+  // SMTP Configuration
+  SMTP_HOST: process.env.SMTP_HOST || devDefaults.SMTP_HOST,
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || devDefaults.SMTP_PORT, 10),
+  SMTP_USER: process.env.SMTP_USER || devDefaults.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS || devDefaults.SMTP_PASS,
+  SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || devDefaults.SMTP_FROM_EMAIL,
+  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || devDefaults.SMTP_FROM_NAME,
 };
