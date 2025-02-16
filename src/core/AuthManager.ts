@@ -400,49 +400,37 @@ export class AuthManager {
   }
 
   async sendEmailVerification(email: string): Promise<void> {
-    console.log('DEBUG: Starting email verification for:', email);
     const users = await this.db.query<PhoenixUser>(this.USERS_COLLECTION, [
       { field: 'email', operator: '==', value: email.toLowerCase() }
     ]);
-    console.log('DEBUG: Found users:', users.length);
 
     if (users.length === 0) {
-      console.log('DEBUG: User not found');
       throw new PhoenixStoreError('User not found', 'USER_NOT_FOUND');
     }
 
     const user = users[0];
-    console.log('DEBUG: User verified status:', user.emailVerified);
     
     if (user.emailVerified) {
-      console.log('DEBUG: User already verified');
       throw new PhoenixStoreError('Email already verified', 'EMAIL_ALREADY_VERIFIED');
     }
 
     // Generate verification token
-    console.log('DEBUG: Generating verification token');
     const token = await this.generateEmailToken(user.id!, 'verification');
     
     // Send verification email
-    console.log('DEBUG: Sending verification email');
     const emailOptions = generateVerificationEmail(user.email, token);
     await sendEmail(emailOptions);
-    console.log('DEBUG: Email sent successfully');
   }
 
   async verifyEmail(token: string): Promise<void> {
-    console.log('DEBUG: Starting email verification with token');
     const payload = await this.verifyEmailToken(token, 'verification');
     if (!payload.sub) {
-      console.log('DEBUG: Invalid token - no user ID');
       throw new PhoenixStoreError('Invalid token', 'INVALID_TOKEN');
     }
 
-    console.log('DEBUG: Updating user verified status');
     await this.db.update(this.USERS_COLLECTION, payload.sub, {
       emailVerified: true
     });
-    console.log('DEBUG: Email verification completed');
   }
 
   async sendPasswordResetEmail(email: string): Promise<void> {
@@ -507,35 +495,27 @@ export class AuthManager {
   }
 
   private async verifyEmailToken(token: string, type: 'verification' | 'reset'): Promise<{ sub: string }> {
-    console.log('DEBUG: Verifying email token:', { type });
     const tokens = await this.db.query('email_tokens', [
       { field: 'token', operator: '==', value: token },
       { field: 'type', operator: '==', value: type },
       { field: 'used', operator: '==', value: false }
     ]);
-    console.log('DEBUG: Found tokens:', tokens.length);
 
     if (tokens.length === 0) {
-      console.log('DEBUG: No valid token found');
       throw new PhoenixStoreError('Invalid or expired token', 'INVALID_TOKEN');
     }
 
     const emailToken = tokens[0];
-    console.log('DEBUG: Token expiry:', emailToken.expiresAt);
-    console.log('DEBUG: Current time:', new Date().toISOString());
     
     // Check if token is expired
     if (new Date(emailToken.expiresAt) < new Date()) {
-      console.log('DEBUG: Token has expired');
       throw new PhoenixStoreError('Token has expired', 'TOKEN_EXPIRED');
     }
 
     // Mark token as used
-    console.log('DEBUG: Marking token as used');
     if (emailToken.id) {
       await this.db.update('email_tokens', emailToken.id, { used: true });
     }
-    console.log('DEBUG: Token verification completed');
 
     return { sub: emailToken.userId };
   }

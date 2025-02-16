@@ -110,37 +110,26 @@ describe('Email Functionality', () => {
     });
 
     test('should not send verification email to already verified user', async () => {
-      console.log('DEBUG TEST: Starting verification test');
-      console.log('DEBUG TEST: Initial user:', testUser);
-
       // First verify the user
-      console.log('DEBUG TEST: Updating user verified status');
       await db.update('users', testUser.id!, { emailVerified: true });
 
       // Verify the update was successful
-      console.log('DEBUG TEST: Fetching updated user');
       const updatedUser = await db.get<PhoenixUser>('users', testUser.id!);
       if (!updatedUser) {
         throw new Error('Failed to get updated user');
       }
-      console.log('DEBUG TEST: Updated user:', updatedUser);
       expect(updatedUser.emailVerified).toBe(true);
 
       // Try to send verification email
-      console.log('DEBUG TEST: Attempting to send verification email');
       try {
         await authManager.sendEmailVerification(testUser.email);
-        console.log('DEBUG TEST: Email sent - this should not happen');
         throw new Error('Should not reach this point');
       } catch (error: any) {
-        console.log('DEBUG TEST: Caught error:', error.message);
         expect(error.message).toBe('Email already verified');
       }
 
       // Verify no email was sent
-      console.log('DEBUG TEST: Checking if email was sent');
       expect(mockTransporter.sendMail).not.toHaveBeenCalled();
-      console.log('DEBUG TEST: Test completed');
     });
 
     test('should verify email with valid token', async () => {
@@ -256,47 +245,33 @@ describe('Email Functionality', () => {
     });
 
     test('should not allow reuse of expired tokens', async () => {
-      console.log('DEBUG TEST: Starting expired token test');
-      
       // Send verification email to create token
-      console.log('DEBUG TEST: Creating verification email');
       await authManager.sendEmailVerification(testUser.email);
 
       // Get the token
-      console.log('DEBUG TEST: Fetching created token');
       const tokens = await db.query('email_tokens', [
         { field: 'userId', operator: '==', value: testUser.id },
         { field: 'type', operator: '==', value: 'verification' }
       ]);
-      console.log('DEBUG TEST: Found tokens:', tokens.length);
 
       expect(tokens.length).toBe(1);
       const token = tokens[0];
 
       // Manually expire the token
-      console.log('DEBUG TEST: Setting token expiry to past date');
       if (token.id) {
         const pastDate = new Date(Date.now() - 60000); // 1 minute ago
         await db.update('email_tokens', token.id, {
           expiresAt: pastDate.toISOString()
         });
-        
-        // Verify the update
-        const updatedToken = await db.get('email_tokens', token.id);
-        console.log('DEBUG TEST: Updated token expiry:', updatedToken?.expiresAt);
-        console.log('DEBUG TEST: Current time:', new Date().toISOString());
       }
 
       // Try to use expired token
-      console.log('DEBUG TEST: Attempting to use expired token');
       try {
         await authManager.verifyEmail(token.token);
         throw new Error('Should not reach this point');
       } catch (error: any) {
-        console.log('DEBUG TEST: Caught error:', error.message);
         expect(error.message).toBe('Token has expired');
       }
-      console.log('DEBUG TEST: Expired token test completed');
     });
   });
 }); 
