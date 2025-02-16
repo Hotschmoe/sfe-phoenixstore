@@ -11,7 +11,8 @@ export const swaggerPlugin = swagger({
       { name: 'Documents', description: 'Document operations' },
       { name: 'Queries', description: 'Query operations' },
       { name: 'Authentication', description: 'User authentication and management' },
-      { name: 'Email', description: 'Email verification and password reset' }
+      { name: 'Email', description: 'Email verification and password reset' },
+      { name: 'Storage', description: 'File storage operations' }
     ],
     components: {
       schemas: {
@@ -293,6 +294,128 @@ export const swaggerPlugin = swagger({
                 },
                 additionalProperties: true
               }
+            }
+          }
+        },
+        StorageFile: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'File name from path',
+              example: 'profile.jpg'
+            },
+            bucket: {
+              type: 'string',
+              description: 'Bucket name',
+              example: 'avatars'
+            },
+            path: {
+              type: 'string',
+              description: 'Full path in bucket',
+              example: 'users/123/profile.jpg'
+            },
+            contentType: {
+              type: 'string',
+              description: 'MIME type',
+              example: 'image/jpeg'
+            },
+            size: {
+              type: 'number',
+              description: 'File size in bytes',
+              example: 1024
+            },
+            metadata: {
+              type: 'object',
+              description: 'Custom metadata',
+              additionalProperties: {
+                type: 'string'
+              },
+              example: {
+                userId: '123',
+                purpose: 'profile'
+              }
+            },
+            createdAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Creation timestamp'
+            },
+            updatedAt: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Last modification timestamp'
+            },
+            url: {
+              type: 'string',
+              description: 'Public URL',
+              example: 'http://storage.example.com/avatars/users/123/profile.jpg'
+            }
+          }
+        },
+        UploadOptions: {
+          type: 'object',
+          properties: {
+            bucket: {
+              type: 'string',
+              description: 'Target bucket (defaults to uploads)',
+              example: 'avatars'
+            },
+            contentType: {
+              type: 'string',
+              description: 'Override content type',
+              example: 'image/jpeg'
+            },
+            metadata: {
+              type: 'object',
+              description: 'Custom metadata',
+              additionalProperties: {
+                type: 'string'
+              },
+              example: {
+                userId: '123',
+                purpose: 'profile'
+              }
+            }
+          }
+        },
+        PresignedUrlOptions: {
+          type: 'object',
+          properties: {
+            bucket: {
+              type: 'string',
+              description: 'Target bucket (defaults to uploads)',
+              example: 'avatars'
+            },
+            contentType: {
+              type: 'string',
+              description: 'Override content type',
+              example: 'image/jpeg'
+            },
+            expires: {
+              type: 'number',
+              description: 'URL expiration in seconds',
+              example: 3600
+            }
+          }
+        },
+        StorageError: {
+          type: 'object',
+          properties: {
+            code: {
+              type: 'string',
+              enum: [
+                'storage/unknown',
+                'storage/object-not-found',
+                'storage/bucket-not-found',
+                'storage/upload-failed',
+                'storage/invalid-url'
+              ],
+              example: 'storage/object-not-found'
+            },
+            message: {
+              type: 'string',
+              example: 'File does not exist'
             }
           }
         }
