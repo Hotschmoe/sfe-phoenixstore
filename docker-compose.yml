@@ -103,4 +103,4 @@ services:
 
 volumes:
   mongodb_data:
-  minio_data: 
+  minio_data:
