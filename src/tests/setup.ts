@@ -6,16 +6,30 @@ const TEST_DB_NAME = `${config.MONGODB_DATABASE}_test`;
 
 // For tests, we always want to use localhost since tests run outside Docker
 const TEST_CONFIG = {
-  host: 'localhost',
-  port: config.MONGODB_PORT,
-  user: config.MONGODB_USER,
-  password: config.MONGODB_PASSWORD
+  mongodb: {
+    host: 'localhost',
+    port: config.MONGODB_PORT,
+    user: config.MONGODB_USER,
+    password: config.MONGODB_PASSWORD
+  },
+  storage: {
+    endPoint: 'localhost',
+    port: config.STORAGE_PORT,
+    useSSL: false,
+    accessKey: config.STORAGE_ACCESS_KEY,
+    secretKey: config.STORAGE_SECRET_KEY,
+    region: config.STORAGE_REGION,
+    publicUrl: `http://localhost:${config.STORAGE_PORT}`
+  }
 };
 
 export const getTestDbUri = () => {
   // Create test URI with authentication
-  return `mongodb://${TEST_CONFIG.user}:${TEST_CONFIG.password}@${TEST_CONFIG.host}:${TEST_CONFIG.port}/${TEST_DB_NAME}?authSource=admin`;
+  const { host, port, user, password } = TEST_CONFIG.mongodb;
+  return `mongodb://${user}:${password}@${host}:${port}/${TEST_DB_NAME}?authSource=admin`;
 };
+
+export const getTestStorageConfig = () => TEST_CONFIG.storage;
 
 export const cleanupDatabase = async () => {
   console.log('Connecting to MongoDB...');
