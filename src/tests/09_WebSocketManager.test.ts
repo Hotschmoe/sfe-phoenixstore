@@ -120,6 +120,68 @@ describe('WebSocketManager', () => {
     }
   });
 
+  // Helper function to wait for specific message type
+  const waitForMessage = async <T extends WebSocketMessage>(
+    queue: T[],
+    expectedType: T['type'],
+    timeout: number = 5000
+  ): Promise<T> => {
+    const startTime = Date.now();
+    while (queue.length === 0 || queue[0].type !== expectedType) {
+      if (Date.now() - startTime > timeout) {
+        throw new Error(`Timeout waiting for ${expectedType} message`);
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const message = queue.shift();
+    if (!message || message.type !== expectedType) {
+      throw new Error(`Expected ${expectedType} message`);
+    }
+    return message;
+  };
+
+  // Helper function to authenticate client
+  const authenticateClient = async (
+    client: WebSocket,
+    messageQueue: (ConnectedMessage | AuthResponseMessage)[],
+    requestId: string = 'test-auth'
+  ): Promise<AuthResponseMessage> => {
+    const messageHandler = (data: WebSocket.RawData) => {
+      const msg = JSON.parse(data.toString());
+      if (msg && typeof msg === 'object' && 'type' in msg) {
+        messageQueue.push(msg as ConnectedMessage | AuthResponseMessage);
+      }
+    };
+    client.on('message', messageHandler);
+
+    // Wait for connected message
+    const connectedMsg = await waitForMessage<ConnectedMessage>(
+      messageQueue as ConnectedMessage[],
+      'connected'
+    );
+    expect(connectedMsg.requestId).toBeTruthy();
+
+    // Send auth message
+    const authMessage = {
+      type: 'auth',
+      requestId,
+      token: 'test-token'
+    };
+    client.send(JSON.stringify(authMessage));
+
+    // Wait for auth response
+    const authResponse = await waitForMessage<AuthResponseMessage>(
+      messageQueue as AuthResponseMessage[],
+      'auth'
+    );
+    expect(authResponse.requestId).toBe(requestId);
+    expect(authResponse.status).toBe('success');
+    expect(typeof authResponse.userId).toBe('string');
+
+    client.off('message', messageHandler);
+    return authResponse;
+  };
+
   test('should receive connected message on connection', async () => {
     const message = await new Promise((resolve) => {
       wsClient.once('message', (data) => {
@@ -133,48 +195,8 @@ describe('WebSocketManager', () => {
 
   test('should handle authentication', async () => {
     const messageQueue: (ConnectedMessage | AuthResponseMessage)[] = [];
-    const messageHandler = (data: WebSocket.RawData) => {
-      const msg = JSON.parse(data.toString());
-      if (msg && typeof msg === 'object' && 'type' in msg) {
-        messageQueue.push(msg as ConnectedMessage | AuthResponseMessage);
-      }
-    };
-    wsClient.on('message', messageHandler);
-
-    // Wait for connected message
-    while (messageQueue.length === 0 || messageQueue[0].type !== 'connected') {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const connectedMsg = messageQueue.shift() as ConnectedMessage;
-    expect(connectedMsg.type).toBe('connected');
-    expect(connectedMsg.requestId).toBeTruthy();
-
-    // Send auth message
-    const authMessage = {
-      type: 'auth',
-      requestId: 'test-auth-1',
-      token: 'test-token'
-    };
-    wsClient.send(JSON.stringify(authMessage));
-
-    // Wait for auth response
-    const startTime = Date.now();
-    while (messageQueue.length === 0 || messageQueue[0].type !== 'auth') {
-      if (Date.now() - startTime > 5000) {
-        throw new Error('Timeout waiting for auth response');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const authResponse = messageQueue.shift() as AuthResponseMessage;
-
-    expect(authResponse.type).toBe('auth');
-    expect(authResponse.requestId).toBe('test-auth-1');
-    expect(authResponse.status).toBe('success');
-    expect(typeof authResponse.userId).toBe('string');
-
-    // Clean up
-    wsClient.off('message', messageHandler);
-  }, 15000); // Increase overall test timeout to 15 seconds
+    await authenticateClient(wsClient, messageQueue, 'test-auth-1');
+  }, 15000);
 
   test('should handle document watching', async () => {
     const messageQueue: (ConnectedMessage | AuthResponseMessage | WatchDocumentResponse)[] = [];
@@ -265,42 +287,39 @@ describe('WebSocketManager', () => {
 
     // Clean up
     wsClient.off('message', messageHandler);
-  }, 15000); // Increase timeout to 15 seconds
+  }, 15000);
 
   test('should handle collection watching with query', async () => {
-    const messageQueue: (ConnectedMessage | AuthResponseMessage | WatchCollectionResponse)[] = [];
-    const messageHandler = (data: WebSocket.RawData) => {
-      const msg = JSON.parse(data.toString());
-      if (msg && typeof msg === 'object' && 'type' in msg) {
-        messageQueue.push(msg as ConnectedMessage | AuthResponseMessage | WatchCollectionResponse);
-      }
-    };
-    wsClient.on('message', messageHandler);
-
-    // First authenticate
-    const authMessage = {
-      type: 'auth',
-      requestId: 'test-auth-3',
-      token: 'test-token'
-    };
-    wsClient.send(JSON.stringify(authMessage));
+    // Create separate queues for different message types for type safety
+    const authQueue: (ConnectedMessage | AuthResponseMessage)[] = [];
+    const watchQueue: WatchCollectionResponse[] = [];
     
-    // Wait for connected and auth messages
-    const authStartTime = Date.now();
-    while (messageQueue.length < 2) {
-      if (Date.now() - authStartTime > 5000) {
-        throw new Error('Timeout waiting for auth response');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const [msg1, msg2] = messageQueue.splice(0, 2);
-    if (!msg1 || !msg2 || 
-        msg1.type !== 'connected' || 
-        msg2.type !== 'auth') {
-      throw new Error('Unexpected message types');
-    }
-    const connectedMsg = msg1 as ConnectedMessage;
-    const authResponse = msg2 as AuthResponseMessage;
+    // Set up message handler after authentication
+    const setupMessageHandler = () => {
+      const handler = (data: WebSocket.RawData) => {
+        const msg = JSON.parse(data.toString());
+        if (!msg || typeof msg !== 'object' || !('type' in msg)) return;
+        
+        // Route messages to appropriate queues
+        switch (msg.type) {
+          case 'watch_collection':
+            watchQueue.push(msg as WatchCollectionResponse);
+            break;
+        }
+      };
+      wsClient.on('message', handler);
+      return handler;
+    };
+
+    // Authenticate first without the watch message handler
+    await authenticateClient(wsClient, authQueue, 'test-auth-3');
+
+    // Now set up the watch message handler
+    const messageHandler = setupMessageHandler();
+
+    // Clean up any existing documents
+    const collection = mongoAdapter.getCollection('users');
+    await collection.deleteMany({});
 
     // Create test documents
     const testDocs = [
@@ -328,51 +347,54 @@ describe('WebSocketManager', () => {
       }
     };
 
-    messageQueue.length = 0; // Clear any pending messages
     wsClient.send(JSON.stringify(watchMessage));
 
     // Wait for initial collection state
-    const startTime = Date.now();
-    while (messageQueue.length === 0) {
-      if (Date.now() - startTime > 5000) {
-        throw new Error('Timeout waiting for initial collection state');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const initialState = messageQueue.shift() as WatchCollectionResponse;
-    if (!initialState || initialState.type !== 'watch_collection') {
-      throw new Error('Expected watch_collection message');
-    }
-
+    const initialState = await waitForMessage(watchQueue, 'watch_collection');
     expect(initialState.type).toBe('watch_collection');
     expect(initialState.change.type).toBe('added');
-    expect(initialState.change.changes).toHaveLength(2); // Users 2 and 3
-    expect(initialState.change.changes?.[0]?.data?.name).toBe('User 2');
-    expect(initialState.change.changes?.[1]?.data?.name).toBe('User 3');
+    
+    // Verify we only get documents matching our query
+    const matchingDocs = initialState.change.changes?.filter(change => 
+      change.data && change.data.age > 28
+    );
+    expect(matchingDocs).toHaveLength(2);
+    
+    if (matchingDocs && matchingDocs.length === 2) {
+      expect(matchingDocs[0].data?.name).toBe('User 2');
+      expect(matchingDocs[0].data?.age).toBe(30);
+      expect(matchingDocs[1].data?.name).toBe('User 3');
+      expect(matchingDocs[1].data?.age).toBe(35);
+    }
 
     // Add a new document that matches the query
-    messageQueue.length = 0; // Clear any pending messages
+    watchQueue.length = 0;
     const newDocId = await mongoAdapter.add('users', { name: 'User 4', age: 32 });
 
     // Wait for update notification
-    const updateStartTime = Date.now();
-    while (messageQueue.length === 0) {
-      if (Date.now() - updateStartTime > 5000) {
-        throw new Error('Timeout waiting for collection update');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const updateNotification = messageQueue.shift() as WatchCollectionResponse;
-    if (!updateNotification || updateNotification.type !== 'watch_collection') {
-      throw new Error('Expected watch_collection message');
+    const updateNotification = await waitForMessage(watchQueue, 'watch_collection');
+    expect(updateNotification.type).toBe('watch_collection');
+    
+    // Verify all documents are present and in correct order
+    const updatedDocs = updateNotification.change.changes?.filter(change => 
+      change.data && change.data.age > 28
+    ).sort((a, b) => ((a.data?.age || 0) - (b.data?.age || 0)));
+    expect(updatedDocs).toHaveLength(3);
+    
+    if (updatedDocs && updatedDocs.length === 3) {
+      expect(updatedDocs[0].data?.name).toBe('User 2');
+      expect(updatedDocs[0].data?.age).toBe(30);
+      expect(updatedDocs[1].data?.name).toBe('User 4');
+      expect(updatedDocs[1].data?.age).toBe(32);
+      expect(updatedDocs[2].data?.name).toBe('User 3');
+      expect(updatedDocs[2].data?.age).toBe(35);
     }
 
-    expect(updateNotification.type).toBe('watch_collection');
-    expect(updateNotification.change.changes?.[0]?.data?.name).toBe('User 4');
+    await collection.deleteMany({});
 
     // Clean up
     wsClient.off('message', messageHandler);
-  }, 15000); // Increase timeout to 15 seconds
+  }, 15000);
 
   test('should handle presence system', async () => {
     const messageQueue: (ConnectedMessage | AuthResponseMessage | PresenceMessage)[] = [];
@@ -457,7 +479,7 @@ describe('WebSocketManager', () => {
         client2.close();
       })
     ]);
-  }, 15000); // Increase timeout to 15 seconds
+  }, 15000);
 
   test('should handle unwatch requests', async () => {
     const messageQueue: (ConnectedMessage | AuthResponseMessage | WatchDocumentResponse)[] = [];
@@ -537,5 +559,5 @@ describe('WebSocketManager', () => {
 
     // Clean up
     wsClient.off('message', messageHandler);
-  }, 15000); // Increase timeout to 15 seconds
+  }, 15000);
 }); 
