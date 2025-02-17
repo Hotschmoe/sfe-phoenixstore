@@ -173,4 +173,23 @@ graph TB
 3. **Monitoring**
    - Performance metrics
    - Error tracking
-   - Usage analytics 
+   - Usage analytics
+
+## Future Stretch Goals
+
+1. **Firebase Cloud Functions Alternative**
+   - Serverless function execution
+   - Event-driven triggers (document changes, auth events)
+   - HTTP triggers
+   - Scheduled functions
+   - Background tasks
+   - Function deployment and versioning
+
+2. **Native Bun WebSockets**
+   - Replace ws library with Bun's native WebSocket implementation
+   - Performance optimization
+   - Reduced dependencies
+   - Better integration with Bun runtime
+
+3. **Advanced Features**
+   // ... existing code ... 

@@ -107,6 +107,12 @@ await db.collection('users').doc(userId).delete();
 - 🚧 Authentication
 - 🚧 Security rules
 
+### Future Stretch Goals
+- 🎯 Firebase Cloud Functions alternative (serverless functions, triggers)
+- 🎯 Native Bun WebSockets implementation (replacing ws library)
+- 🎯 Advanced caching and offline support
+- 🎯 GraphQL API layer
+
 ## Development
 
 ### Prerequisites

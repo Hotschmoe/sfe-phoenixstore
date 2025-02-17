@@ -12,6 +12,11 @@ interface Config {
   MONGODB_PORT: string;
   API_URL: string;
   PORT: number;
+  // WebSocket Configuration
+  WEBSOCKET_PORT: number;
+  WEBSOCKET_HEARTBEAT_INTERVAL: number;
+  WEBSOCKET_MAX_CLIENTS: number;
+  WEBSOCKET_PING_TIMEOUT: number;
   // SMTP Configuration
   SMTP_HOST: string;
   SMTP_PORT: number;
@@ -39,6 +44,11 @@ const devDefaults = {
   MONGODB_USER: 'phoenixuser',
   MONGODB_PASSWORD: 'phoenixpass',
   PORT: '3000',
+  // WebSocket defaults
+  WEBSOCKET_PORT: '3001',
+  WEBSOCKET_HEARTBEAT_INTERVAL: '30000',
+  WEBSOCKET_MAX_CLIENTS: '10000',
+  WEBSOCKET_PING_TIMEOUT: '5000',
   // NODE_ENV: 'development', this should be set by Dockerfile
   API_URL: 'http://localhost:3000',
   // SMTP defaults for development
@@ -84,6 +94,11 @@ const validateProductionConfig = () => {
     if (!process.env.STORAGE_ACCESS_KEY) missingVars.push('STORAGE_ACCESS_KEY');
     if (!process.env.STORAGE_SECRET_KEY) missingVars.push('STORAGE_SECRET_KEY');
     if (!process.env.STORAGE_PUBLIC_URL) missingVars.push('STORAGE_PUBLIC_URL');
+    // WebSocket validation
+    if (!process.env.WEBSOCKET_PORT) missingVars.push('WEBSOCKET_PORT');
+    if (!process.env.WEBSOCKET_HEARTBEAT_INTERVAL) missingVars.push('WEBSOCKET_HEARTBEAT_INTERVAL');
+    if (!process.env.WEBSOCKET_MAX_CLIENTS) missingVars.push('WEBSOCKET_MAX_CLIENTS');
+    if (!process.env.WEBSOCKET_PING_TIMEOUT) missingVars.push('WEBSOCKET_PING_TIMEOUT');
     
     if (missingVars.length > 0) {
       console.warn(`⚠️  Warning: Missing required environment variables in production: ${missingVars.join(', ')}`);
@@ -112,6 +127,11 @@ export const config: Config = {
   API_URL: process.env.PHOENIXSTORE_API_URL ? `${process.env.PHOENIXSTORE_API_URL}:${process.env.PHOENIXSTORE_PORT}` : devDefaults.API_URL,
   PORT: parseInt(process.env.PHOENIXSTORE_PORT || devDefaults.PORT, 10),
   // NODE_ENV: process.env.PHOENIXSTORE_ENV || devDefaults.NODE_ENV, // this should be set by Dockerfile
+  // WebSocket Configuration
+  WEBSOCKET_PORT: parseInt(process.env.WEBSOCKET_PORT || devDefaults.WEBSOCKET_PORT, 10),
+  WEBSOCKET_HEARTBEAT_INTERVAL: parseInt(process.env.WEBSOCKET_HEARTBEAT_INTERVAL || devDefaults.WEBSOCKET_HEARTBEAT_INTERVAL, 10),
+  WEBSOCKET_MAX_CLIENTS: parseInt(process.env.WEBSOCKET_MAX_CLIENTS || devDefaults.WEBSOCKET_MAX_CLIENTS, 10),
+  WEBSOCKET_PING_TIMEOUT: parseInt(process.env.WEBSOCKET_PING_TIMEOUT || devDefaults.WEBSOCKET_PING_TIMEOUT, 10),
   // SMTP Configuration
   SMTP_HOST: process.env.SMTP_HOST || devDefaults.SMTP_HOST,
   SMTP_PORT: parseInt(process.env.SMTP_PORT || devDefaults.SMTP_PORT, 10),
