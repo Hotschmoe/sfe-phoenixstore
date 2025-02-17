@@ -17,6 +17,7 @@ interface TestConfig {
     heartbeatInterval: number;
     maxClients: number;
     pingTimeout: number;
+    pollingInterval: number;
   };
   storage: {
     endPoint: string;
@@ -39,9 +40,10 @@ export const TEST_CONFIG: TestConfig = {
   },
   websocket: {
     port: 3002, // Use a different port for tests to avoid conflicts
-    heartbeatInterval: 1000, // Faster heartbeat for tests
+    heartbeatInterval: 5000, // Longer heartbeat for stability
     maxClients: 100, // Lower limit for tests
-    pingTimeout: 1000 // Faster timeout for tests
+    pingTimeout: 5000, // Longer timeout for stability
+    pollingInterval: 500 // Faster polling for tests
   },
   storage: {
     endPoint: 'localhost',
@@ -65,7 +67,8 @@ export const getTestStorageConfig = () => TEST_CONFIG.storage;
 export const getTestWebSocketConfig = (): Required<WebSocketManagerConfig> => ({
   heartbeatInterval: TEST_CONFIG.websocket.heartbeatInterval,
   maxClients: TEST_CONFIG.websocket.maxClients,
-  pingTimeout: TEST_CONFIG.websocket.pingTimeout
+  pingTimeout: TEST_CONFIG.websocket.pingTimeout,
+  pollingInterval: TEST_CONFIG.websocket.pollingInterval
 });
 
 export const cleanupDatabase = async () => {

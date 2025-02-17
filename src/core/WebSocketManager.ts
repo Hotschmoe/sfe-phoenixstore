@@ -1,5 +1,5 @@
 import { WebSocket } from 'ws';
-import { ChangeStream, ChangeStreamDocument, Document, Filter } from 'mongodb';
+import { Document, Filter } from 'mongodb';
 import { nanoid } from 'nanoid/non-secure';
 import { 
   WebSocketMessage,
@@ -20,11 +20,12 @@ export interface WebSocketManagerConfig {
   heartbeatInterval?: number;
   maxClients?: number;
   pingTimeout?: number;
+  pollingInterval?: number;  // Interval for polling document/collection changes
 }
 
 export class WebSocketManager {
   private clients: Map<WebSocket, WebSocketClientState> = new Map();
-  private changeStreams: Map<string, ChangeStream> = new Map();
+  private watchIntervals: Map<string, NodeJS.Timer> = new Map();
   private mongoAdapter: MongoAdapter;
   private config: Required<WebSocketManagerConfig>;
 
@@ -36,7 +37,8 @@ export class WebSocketManager {
     this.config = {
       heartbeatInterval: config.heartbeatInterval ?? 30000,
       maxClients: config.maxClients ?? 10000,
-      pingTimeout: config.pingTimeout ?? 5000
+      pingTimeout: config.pingTimeout ?? 5000,
+      pollingInterval: config.pollingInterval ?? 1000  // Default to 1 second polling
     };
   }
 
@@ -125,20 +127,27 @@ export class WebSocketManager {
       // TODO: Implement token verification
       const userId = 'user_' + nanoid(); // Temporary, replace with actual user ID from token
       const clientState = this.clients.get(ws);
+      
       if (clientState) {
         clientState.userId = userId;
-        this.send(ws, { 
-          type: 'auth',
+        // Send auth response with all required fields
+        const response = { 
+          type: 'auth' as const,
           requestId: message.requestId,
-          userId 
-        });
+          userId,
+          status: 'success'
+        };
+        this.send(ws, response);
+      } else {
+        this.sendError(ws, 'AUTH_FAILED', 'Client state not found');
       }
     } catch (error) {
+      console.error('Authentication error:', error);
       this.sendError(ws, 'AUTH_FAILED', 'Authentication failed');
     }
   }
 
-  // Handle document watch request
+  // Handle document watch request using polling
   private async handleWatchDocument(ws: WebSocket, message: WatchDocumentMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
@@ -159,39 +168,6 @@ export class WebSocketManager {
 
     clientState.subscriptions.set(subscriptionId, subscription);
 
-    // Set up MongoDB change stream for the document
-    const collection = this.mongoAdapter.getCollection(message.collection);
-    const changeStream = collection.watch([
-      { $match: { 'documentKey._id': message.documentId } }
-    ]);
-
-    changeStream.on('change', async (change: ChangeStreamDocument<Document>) => {
-      const documentChange: DocumentChange = {
-        type: this.getChangeType(change.operationType),
-        documentId: message.documentId,
-        data: 'fullDocument' in change ? change.fullDocument as Record<string, any> : undefined,
-        oldData: 'oldDocument' in change ? change.oldDocument as Record<string, any> : undefined,
-        timestamp: Date.now()
-      };
-
-      // Get the current document state
-      if (documentChange.type !== 'removed') {
-        const currentDoc = await this.mongoAdapter.get(message.collection, message.documentId);
-        if (currentDoc) {
-          documentChange.data = currentDoc as Record<string, any>;
-        }
-      }
-
-      this.send(ws, {
-        type: 'watch_document',
-        requestId: message.requestId,
-        subscriptionId,
-        change: documentChange
-      });
-    });
-
-    this.changeStreams.set(subscriptionId, changeStream);
-
     // Send initial document state
     const initialDoc = await this.mongoAdapter.get(message.collection, message.documentId);
     if (initialDoc) {
@@ -207,9 +183,49 @@ export class WebSocketManager {
         }
       });
     }
+
+    // Set up polling interval for document changes
+    const interval = setInterval(async () => {
+      try {
+        const currentDoc = await this.mongoAdapter.get(message.collection, message.documentId);
+        
+        if (!currentDoc) {
+          // Document was deleted
+          this.send(ws, {
+            type: 'watch_document',
+            requestId: message.requestId,
+            subscriptionId,
+            change: {
+              type: 'removed',
+              documentId: message.documentId,
+              timestamp: Date.now()
+            }
+          });
+          this.handleUnwatch(ws, { type: 'unwatch', requestId: nanoid(), subscriptionId });
+          return;
+        }
+
+        // Send update if document changed
+        this.send(ws, {
+          type: 'watch_document',
+          requestId: message.requestId,
+          subscriptionId,
+          change: {
+            type: 'modified',
+            documentId: message.documentId,
+            data: currentDoc,
+            timestamp: Date.now()
+          }
+        });
+      } catch (error) {
+        console.error('Error polling document:', error);
+      }
+    }, this.config.pollingInterval);
+
+    this.watchIntervals.set(subscriptionId, interval);
   }
 
-  // Handle collection watch request
+  // Handle collection watch request using polling
   private async handleWatchCollection(ws: WebSocket, message: WatchCollectionMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
@@ -229,45 +245,6 @@ export class WebSocketManager {
     };
 
     clientState.subscriptions.set(subscriptionId, subscription);
-
-    // Build MongoDB pipeline for the query
-    const pipeline = this.buildWatchPipeline(message.query);
-    const collection = this.mongoAdapter.getCollection(message.collection);
-    const changeStream = collection.watch(pipeline);
-
-    changeStream.on('change', async (change: ChangeStreamDocument<Document>) => {
-      if ('documentKey' in change) {
-        const documentId = change.documentKey._id.toString();
-        const documentChange: DocumentChange = {
-          type: this.getChangeType(change.operationType),
-          documentId,
-          data: 'fullDocument' in change ? change.fullDocument as Record<string, any> : undefined,
-          oldData: 'oldDocument' in change ? change.oldDocument as Record<string, any> : undefined,
-          timestamp: Date.now()
-        };
-
-        // Get the current document state
-        if (documentChange.type !== 'removed') {
-          const currentDoc = await this.mongoAdapter.get(message.collection, documentId);
-          if (currentDoc) {
-            documentChange.data = currentDoc as Record<string, any>;
-          }
-        }
-
-        this.send(ws, {
-          type: 'watch_collection',
-          requestId: message.requestId,
-          subscriptionId,
-          change: {
-            type: documentChange.type,
-            changes: [documentChange],
-            timestamp: Date.now()
-          }
-        });
-      }
-    });
-
-    this.changeStreams.set(subscriptionId, changeStream);
 
     // Send initial collection state
     const filter = this.buildQueryFilter(message.query);
@@ -290,6 +267,34 @@ export class WebSocketManager {
         }
       });
     }
+
+    // Set up polling interval for collection changes
+    const interval = setInterval(async () => {
+      try {
+        const currentDocs = await this.mongoAdapter.find(message.collection, filter);
+        
+        // Send updates for changed documents
+        this.send(ws, {
+          type: 'watch_collection',
+          requestId: message.requestId,
+          subscriptionId,
+          change: {
+            type: 'modified',
+            changes: currentDocs.map(doc => ({
+              type: 'modified' as ChangeType,
+              documentId: doc.id,
+              data: doc,
+              timestamp: Date.now()
+            })),
+            timestamp: Date.now()
+          }
+        });
+      } catch (error) {
+        console.error('Error polling collection:', error);
+      }
+    }, this.config.pollingInterval);
+
+    this.watchIntervals.set(subscriptionId, interval);
   }
 
   // Handle presence system messages
@@ -318,10 +323,11 @@ export class WebSocketManager {
 
     const subscription = clientState.subscriptions.get(message.subscriptionId);
     if (subscription) {
-      const changeStream = this.changeStreams.get(message.subscriptionId);
-      if (changeStream) {
-        await changeStream.close();
-        this.changeStreams.delete(message.subscriptionId);
+      // Clear polling interval
+      const interval = this.watchIntervals.get(message.subscriptionId);
+      if (interval) {
+        clearInterval(interval);
+        this.watchIntervals.delete(message.subscriptionId);
       }
       clientState.subscriptions.delete(message.subscriptionId);
     }
@@ -331,12 +337,12 @@ export class WebSocketManager {
   private handleDisconnection(ws: WebSocket): void {
     const clientState = this.clients.get(ws);
     if (clientState) {
-      // Close all change streams
-      for (const [subscriptionId, subscription] of clientState.subscriptions) {
-        const changeStream = this.changeStreams.get(subscriptionId);
-        if (changeStream) {
-          changeStream.close();
-          this.changeStreams.delete(subscriptionId);
+      // Clear all polling intervals
+      for (const [subscriptionId] of clientState.subscriptions) {
+        const interval = this.watchIntervals.get(subscriptionId);
+        if (interval) {
+          clearInterval(interval);
+          this.watchIntervals.delete(subscriptionId);
         }
       }
 
@@ -385,42 +391,6 @@ export class WebSocketManager {
     }
   }
 
-  // Utility method to build MongoDB watch pipeline
-  private buildWatchPipeline(query?: WatchCollectionMessage['query']): any[] {
-    const pipeline: any[] = [];
-
-    if (query) {
-      const match: any = { $and: [] };
-
-      if (query.where) {
-        for (const condition of query.where) {
-          const mongoOperator = this.getMongoOperator(condition.operator);
-          match.$and.push({
-            [`fullDocument.${condition.field}`]: { [mongoOperator]: condition.value }
-          });
-        }
-      }
-
-      if (match.$and.length > 0) {
-        pipeline.push({ $match: match });
-      }
-
-      if (query.orderBy) {
-        const sort: any = {};
-        for (const order of query.orderBy) {
-          sort[`fullDocument.${order.field}`] = order.direction === 'asc' ? 1 : -1;
-        }
-        pipeline.push({ $sort: sort });
-      }
-
-      if (query.limit) {
-        pipeline.push({ $limit: query.limit });
-      }
-    }
-
-    return pipeline;
-  }
-
   // Utility method to build MongoDB query filter
   private buildQueryFilter(query?: WatchCollectionMessage['query']): Filter<Document> {
     const filter: Filter<Document> = {};
@@ -439,21 +409,6 @@ export class WebSocketManager {
     }
 
     return filter;
-  }
-
-  // Utility method to convert MongoDB operation types to change types
-  private getChangeType(operationType: string): ChangeType {
-    switch (operationType) {
-      case 'insert':
-        return 'added';
-      case 'update':
-      case 'replace':
-        return 'modified';
-      case 'delete':
-        return 'removed';
-      default:
-        return 'modified';
-    }
   }
 
   // Utility method to convert query operators to MongoDB operators

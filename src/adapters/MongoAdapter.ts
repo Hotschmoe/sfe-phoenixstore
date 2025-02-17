@@ -28,10 +28,6 @@ export class MongoAdapter {
       this.db = this.client.db(this.dbName);
       console.log('Successfully connected to MongoDB');
     } catch (error) {
-      // Ensure any MongoDB-specific errors are wrapped in our PhoenixStoreError
-      if (error instanceof PhoenixStoreError) {
-        throw error;
-      }
       throw new PhoenixStoreError(
         'Failed to connect to MongoDB',
         'MONGODB_CONNECTION_ERROR',

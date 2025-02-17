@@ -70,6 +70,14 @@ export interface AuthMessage extends WebSocketMessage {
   token: string;
 }
 
+// Authentication response message
+export interface AuthResponseMessage extends WebSocketMessage {
+  type: 'auth';
+  requestId: string;
+  userId: string;
+  status: 'success' | 'error';
+}
+
 // Change event types
 export type ChangeType = 'added' | 'modified' | 'removed';
 
