@@ -102,6 +102,117 @@ graph TB
        deactivate A
    ```
 
+## WebSocket Implementation
+
+### Overview
+The WebSocket implementation provides real-time data synchronization through a polling-based approach, offering a familiar Firebase-like experience for document and collection watching.
+
+### Key Components
+
+1. **WebSocketManager**
+   - Handles WebSocket connections and message routing
+   - Manages client state and subscriptions
+   - Implements authentication and presence system
+   - Coordinates polling-based updates
+
+2. **Message Types**
+   ```typescript
+   - connected    // Initial connection established
+   - auth        // Authentication messages
+   - watch_document    // Watch single document
+   - watch_collection  // Watch collection with query
+   - presence    // Presence system updates
+   - unwatch     // Stop watching
+   ```
+
+3. **Subscription System**
+   ```mermaid
+   graph TD
+    Client[Client] -->|Connect| WSM[WebSocket Manager]
+    WSM -->|Authenticate| Client
+    Client -->|Watch Request| WSM
+    WSM -->|Initial State| Client
+    WSM -->|Poll Changes| MongoDB
+    MongoDB -->|Updates| WSM
+    WSM -->|Push Updates| Client
+   ```
+
+### Implementation Details
+
+1. **Polling Strategy**
+   - Configurable polling interval (default: 1000ms)
+   - Reduced interval for tests (500ms)
+   - Efficient query caching (planned)
+   - Smart update detection to minimize unnecessary notifications
+
+2. **Authentication Flow**
+   ```mermaid
+   sequenceDiagram
+       Client->>+WSM: Connect
+       WSM-->>-Client: Connected Message
+       Client->>+WSM: Auth Request
+       WSM->>WSM: Validate Token
+       WSM-->>-Client: Auth Response + UserId
+   ```
+
+3. **Document Watching**
+   - Initial state sent immediately
+   - Polling for changes at configured interval
+   - Change detection for updates/deletes
+   - Automatic cleanup on document deletion
+
+4. **Collection Watching**
+   - Query-based filtering
+   - Sorting support
+   - Change aggregation
+   - Efficient update delivery
+
+5. **Presence System**
+   - Real-time user status updates
+   - Custom metadata support
+   - Automatic offline detection
+   - Status broadcast to relevant clients
+
+### Performance Considerations
+
+1. **Connection Management**
+   - Heartbeat mechanism (configurable interval)
+   - Connection health monitoring
+   - Automatic cleanup of dead connections
+   - Maximum client limit enforcement
+
+2. **Resource Optimization**
+   - Efficient message queuing
+   - Subscription cleanup
+   - Memory usage monitoring
+   - Connection pooling
+
+3. **Scalability Features**
+   - Configurable polling intervals
+   - Client-side rate limiting
+   - Server-side resource limits
+   - Efficient message routing
+
+### Future Enhancements
+
+1. **Change Streams**
+   - Replace polling with MongoDB Change Streams
+   - Real-time updates without polling
+   - Reduced database load
+   - Lower latency
+
+2. **Smart Caching**
+   - Query result caching
+   - Differential updates
+   - Client-side state management
+   - Optimistic updates
+
+3. **Advanced Features**
+   - Batch updates
+   - Compression
+   - Binary protocol support
+   - Custom event channels
+
 ## Design Decisions
 
 ### 1. Why MongoDB?
@@ -173,4 +284,23 @@ graph TB
 3. **Monitoring**
    - Performance metrics
    - Error tracking
-   - Usage analytics 
+   - Usage analytics
+
+## Future Stretch Goals
+
+1. **Firebase Cloud Functions Alternative**
+   - Serverless function execution
+   - Event-driven triggers (document changes, auth events)
+   - HTTP triggers
+   - Scheduled functions
+   - Background tasks
+   - Function deployment and versioning
+
+2. **Native Bun WebSockets**
+   - Replace ws library with Bun's native WebSocket implementation
+   - Performance optimization
+   - Reduced dependencies
+   - Better integration with Bun runtime
+
+3. **Advanced Features**
+   // ... existing code ... 

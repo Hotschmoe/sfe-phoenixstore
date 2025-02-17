@@ -1,20 +1,19 @@
-import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document, OptionalUnlessRequiredId } from 'mongodb';
+import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document, OptionalUnlessRequiredId, FindOptions, UpdateFilter, DeleteOptions, InsertOneOptions, UpdateOptions, WithId } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
+import { config } from '../utils/config';
 
 export class MongoAdapter {
   private client: MongoClient;
   private db: Db | null = null;
 
   constructor(private uri: string, private dbName: string) {
-    try {
-      this.client = new MongoClient(uri);
-    } catch (error) {
+    if (!uri || !dbName) {
       throw new PhoenixStoreError(
-        'Failed to connect to MongoDB: Invalid connection string format',
-        'MONGODB_CONNECTION_ERROR',
-        error as Error
+        'MongoDB URI and database name are required',
+        'MONGODB_CONNECTION_ERROR'
       );
     }
+    this.client = new MongoClient(uri);
   }
 
   async connect(): Promise<void> {
@@ -29,10 +28,6 @@ export class MongoAdapter {
       this.db = this.client.db(this.dbName);
       console.log('Successfully connected to MongoDB');
     } catch (error) {
-      // Ensure any MongoDB-specific errors are wrapped in our PhoenixStoreError
-      if (error instanceof PhoenixStoreError) {
-        throw error;
-      }
       throw new PhoenixStoreError(
         'Failed to connect to MongoDB',
         'MONGODB_CONNECTION_ERROR',
@@ -45,14 +40,20 @@ export class MongoAdapter {
     await this.client.close();
   }
 
-  private getCollection<T extends Document>(collectionName: string): Collection<T> {
+  // Add public getter for database connection
+  public get database(): Db {
     if (!this.db) {
       throw new PhoenixStoreError(
         'Database connection not initialized',
         'MONGODB_NOT_CONNECTED'
       );
     }
-    return this.db.collection<T>(collectionName);
+    return this.db;
+  }
+
+  // Add public method to get collection with proper typing
+  public getCollection<T extends Document = Document>(name: string): Collection<T> {
+    return this.database.collection<T>(name);
   }
 
   // Firestore-like query operator conversion
@@ -88,7 +89,7 @@ export class MongoAdapter {
       const sort = this.buildSort(options.orderBy, options.orderDirection);
       
       // Create query
-      let query = collection.find(filter as Filter<T>);
+      let query = collection.find(filter);
       
       // Apply sorting
       if (sort) {
@@ -179,8 +180,8 @@ export class MongoAdapter {
     };
   }
 
-  // Basic CRUD operations
-  async add<T extends DocumentData>(
+  // Update CRUD operations with proper typing
+  async add<T extends Document>(
     collectionName: string,
     data: T
   ): Promise<string> {
@@ -189,26 +190,26 @@ export class MongoAdapter {
     return result.insertedId.toString();
   }
 
-  async get<T extends DocumentData>(
+  async get<T extends Document>(
     collectionName: string,
     id: string
   ): Promise<T | null> {
     const collection = this.getCollection<T>(collectionName);
     try {
       const objectId = new ObjectId(id);
-      const doc = await collection.findOne({ _id: objectId } as Filter<T>);
+      const doc = await collection.findOne<T>({ _id: objectId } as Filter<T>);
       if (!doc) return null;
       
       // Convert MongoDB _id to string id in the returned document
       const { _id, ...rest } = doc;
-      return { id: _id.toString(), ...rest } as unknown as T;
+      return { ...rest, id: _id.toString() } as unknown as T;
     } catch (error) {
       // If ID is invalid format, return null
       return null;
     }
   }
 
-  async update<T extends DocumentData>(
+  async update<T extends Document>(
     collectionName: string,
     id: string,
     data: Partial<T>
@@ -230,10 +231,64 @@ export class MongoAdapter {
     const collection = this.getCollection(collectionName);
     try {
       const objectId = new ObjectId(id);
-      const result = await collection.deleteOne({ _id: objectId });
+      const result = await collection.deleteOne({ _id: objectId } as Filter<Document>);
       return result.deletedCount > 0;
     } catch (error) {
       return false;
     }
+  }
+
+  // Add new methods for WebSocket support
+  public async find<T extends Document = Document>(
+    collectionName: string,
+    filter: Filter<T> = {},
+    options: FindOptions = {}
+  ): Promise<T[]> {
+    const collection = this.getCollection<T>(collectionName);
+    const results = await collection.find(filter, options).toArray();
+    return results.map(doc => {
+      const { _id, ...rest } = doc;
+      return { ...rest, id: _id.toString() } as unknown as T;
+    });
+  }
+
+  public async findOne<T extends Document = Document>(
+    collectionName: string,
+    filter: Filter<T>
+  ): Promise<T | null> {
+    const collection = this.getCollection<T>(collectionName);
+    const result = await collection.findOne(filter);
+    if (!result) return null;
+    
+    const { _id, ...rest } = result;
+    return { ...rest, id: _id.toString() } as unknown as T;
+  }
+
+  public async insertOne<T extends Document = Document>(
+    collectionName: string,
+    document: T,
+    options?: InsertOneOptions
+  ) {
+    const collection = this.getCollection<T>(collectionName);
+    return collection.insertOne(document as OptionalUnlessRequiredId<T>, options);
+  }
+
+  public async updateOne<T extends Document = Document>(
+    collectionName: string,
+    filter: Filter<T>,
+    update: UpdateFilter<T>,
+    options?: UpdateOptions
+  ) {
+    const collection = this.getCollection<T>(collectionName);
+    return collection.updateOne(filter, update, options);
+  }
+
+  public async deleteOne<T extends Document = Document>(
+    collectionName: string,
+    filter: Filter<T>,
+    options?: DeleteOptions
+  ) {
+    const collection = this.getCollection<T>(collectionName);
+    return collection.deleteOne(filter, options);
   }
 }
