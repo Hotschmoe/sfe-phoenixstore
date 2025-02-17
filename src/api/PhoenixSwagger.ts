@@ -12,7 +12,8 @@ export const swaggerPlugin = swagger({
       { name: 'Queries', description: 'Query operations' },
       { name: 'Authentication', description: 'User authentication and management' },
       { name: 'Email', description: 'Email verification and password reset' },
-      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' }
+      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' },
+      { name: 'WebSocket', description: 'Real-time data synchronization via WebSocket' }
     ],
     components: {
       schemas: {
@@ -448,6 +449,196 @@ export const swaggerPlugin = swagger({
               example: 'File does not exist'
             }
           }
+        },
+        WebSocketMessage: {
+          type: 'object',
+          required: ['type'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['connected', 'auth', 'watch_document', 'watch_collection', 'presence', 'unwatch'],
+              description: 'Message type'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier for message correlation'
+            }
+          }
+        },
+        WebSocketAuthRequest: {
+          type: 'object',
+          required: ['type', 'requestId', 'token'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['auth'],
+              description: 'Authentication request'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier'
+            },
+            token: {
+              type: 'string',
+              description: 'JWT authentication token'
+            }
+          }
+        },
+        WebSocketWatchDocumentRequest: {
+          type: 'object',
+          required: ['type', 'requestId', 'collection', 'documentId'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['watch_document'],
+              description: 'Watch document request'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier'
+            },
+            collection: {
+              type: 'string',
+              description: 'Collection name'
+            },
+            documentId: {
+              type: 'string',
+              description: 'Document ID to watch'
+            }
+          }
+        },
+        WebSocketWatchCollectionRequest: {
+          type: 'object',
+          required: ['type', 'requestId', 'collection'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['watch_collection'],
+              description: 'Watch collection request'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier'
+            },
+            collection: {
+              type: 'string',
+              description: 'Collection name'
+            },
+            query: {
+              type: 'object',
+              properties: {
+                where: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      field: { type: 'string' },
+                      operator: { type: 'string' },
+                      value: { 
+                        oneOf: [
+                          { type: 'string' },
+                          { type: 'number' },
+                          { type: 'boolean' },
+                          { type: 'array', items: { type: 'string' } },
+                          { type: 'array', items: { type: 'number' } }
+                        ]
+                      }
+                    }
+                  }
+                },
+                orderBy: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      field: { type: 'string' },
+                      direction: { type: 'string', enum: ['asc', 'desc'] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        WebSocketPresenceRequest: {
+          type: 'object',
+          required: ['type', 'requestId', 'action', 'status'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['presence'],
+              description: 'Presence update request'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier'
+            },
+            action: {
+              type: 'string',
+              enum: ['update'],
+              description: 'Presence action'
+            },
+            status: {
+              type: 'string',
+              description: 'User status'
+            },
+            metadata: {
+              type: 'object',
+              description: 'Optional presence metadata',
+              additionalProperties: true
+            }
+          }
+        },
+        WebSocketUnwatchRequest: {
+          type: 'object',
+          required: ['type', 'requestId', 'subscriptionId'],
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['unwatch'],
+              description: 'Unwatch request'
+            },
+            requestId: {
+              type: 'string',
+              description: 'Unique request identifier'
+            },
+            subscriptionId: {
+              type: 'string',
+              description: 'Subscription ID to unwatch'
+            }
+          }
+        },
+        DocumentChange: {
+          type: 'object',
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['added', 'modified', 'removed'],
+              description: 'Type of change'
+            },
+            data: {
+              type: 'object',
+              description: 'Document data',
+              additionalProperties: true
+            }
+          }
+        },
+        CollectionChange: {
+          type: 'object',
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['added', 'modified', 'removed'],
+              description: 'Type of change'
+            },
+            changes: {
+              type: 'array',
+              items: {
+                $ref: '#/components/schemas/DocumentChange'
+              },
+              description: 'Array of document changes'
+            }
+          }
         }
       },
       securitySchemes: {
@@ -463,6 +654,99 @@ export const swaggerPlugin = swagger({
       {
         bearerAuth: []
       }
+    ],
+    paths: {
+      '/websocket': {
+        get: {
+          tags: ['WebSocket'],
+          summary: 'WebSocket Connection Endpoint',
+          description: `
+WebSocket endpoint for real-time data synchronization. Supports:
+- Document watching
+- Collection watching with queries
+- Presence system
+- Authentication
+
+Example usage:
+\`\`\`javascript
+const ws = new WebSocket('ws://your-server/websocket');
+
+// Handle connection
+ws.onopen = () => {
+  // Authenticate
+  ws.send(JSON.stringify({
+    type: 'auth',
+    requestId: 'auth-1',
+    token: 'your-jwt-token'
+  }));
+};
+
+// Handle messages
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  switch (message.type) {
+    case 'connected':
+      // Handle connection
+      break;
+    case 'auth':
+      // Handle auth response
+      break;
+    case 'watch_document':
+      // Handle document updates
+      break;
+    case 'watch_collection':
+      // Handle collection updates
+      break;
+  }
+};
+
+// Watch a document
+ws.send(JSON.stringify({
+  type: 'watch_document',
+  requestId: 'watch-1',
+  collection: 'users',
+  documentId: 'user123'
+}));
+
+// Watch a collection with query
+ws.send(JSON.stringify({
+  type: 'watch_collection',
+  requestId: 'watch-2',
+  collection: 'users',
+  query: {
+    where: [
+      { field: 'age', operator: '>', value: 21 }
+    ],
+    orderBy: [
+      { field: 'name', direction: 'asc' }
     ]
+  }
+}));
+
+// Update presence
+ws.send(JSON.stringify({
+  type: 'presence',
+  requestId: 'presence-1',
+  action: 'update',
+  status: 'online',
+  metadata: { location: 'home' }
+}));
+
+// Stop watching
+ws.send(JSON.stringify({
+  type: 'unwatch',
+  requestId: 'unwatch-1',
+  subscriptionId: 'subscription-id'
+}));
+\`\`\`
+`,
+          responses: {
+            '101': {
+              description: 'WebSocket connection established'
+            }
+          }
+        }
+      }
+    }
   }
 }); 
