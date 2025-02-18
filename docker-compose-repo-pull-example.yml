@@ -1,0 +1,68 @@
+services:
+  phoenixstore:
+    build:
+      context: https://github.com/Hotschmoe/sfe-phoenixstore.git
+      target: ${PHOENIXSTORE_ENV:-development}
+    ports:
+      - "${PHOENIXSTORE_PORT:-3000}:${PHOENIXSTORE_PORT:-3000}"
+      - "${WEBSOCKET_PORT:-3001}:${WEBSOCKET_PORT:-3001}"
+    environment:
+      - MONGODB_HOST=mongodb
+      - MONGODB_PORT=27017
+      - MONGODB_DATABASE=phoenixstore
+      - MONGODB_USER=phoenixuser
+      - MONGODB_PASSWORD=phoenixpass
+      - PORT=${PHOENIXSTORE_PORT:-3000}
+      - API_URL=${PHOENIXSTORE_API_URL:-http://localhost}:${PHOENIXSTORE_PORT:-3000}
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT:-3001}
+      - STORAGE_ENDPOINT=minio
+      - STORAGE_PORT=9000
+      - STORAGE_ACCESS_KEY=minioadmin
+      - STORAGE_SECRET_KEY=minioadmin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: phoenixuser
+      MONGO_INITDB_ROOT_PASSWORD: phoenixpass
+      MONGO_INITDB_DATABASE: phoenixstore
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  minio_data:
