@@ -12,7 +12,7 @@ function getTransporter(): Transporter {
       secure: config.SMTP_PORT === 465, // true for 465, false for other ports
       auth: {
         user: config.SMTP_USER,
-        pass: config.SMTP_PASS,
+        pass: config.SMTP_PASSWORD,
       },
     });
   }
@@ -55,7 +55,7 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
 
 // Email template functions
 export function generateVerificationEmail(email: string, token: string): EmailOptions {
-  const verificationLink = `${config.API_URL}/auth/verify-email?token=${token}`;
+  const verificationLink = `${config.PHOENIXSTORE_PUBLIC_URL}/auth/verify-email?token=${token}`;
   
   return {
     to: email,
@@ -71,7 +71,7 @@ export function generateVerificationEmail(email: string, token: string): EmailOp
 }
 
 export function generatePasswordResetEmail(email: string, token: string): EmailOptions {
-  const resetLink = `${config.API_URL}/auth/reset-password?token=${token}`;
+  const resetLink = `${config.PHOENIXSTORE_PUBLIC_URL}/auth/reset-password?token=${token}`;
   
   return {
     to: email,

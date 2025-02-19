@@ -2,10 +2,11 @@ import { SignJWT, jwtVerify } from 'jose';
 import { JWTPayload } from '../types/auth';
 import { PhoenixStoreError } from '../types';
 import { randomUUID } from 'crypto';
+import { config } from './config';
 
-const JWT_ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_ACCESS_EXPIRES_IN = config.JWT_ACCESS_EXPIRES_IN || '15m';
+const JWT_REFRESH_EXPIRES_IN = config.JWT_REFRESH_EXPIRES_IN || '7d';
+const JWT_SECRET = config.JWT_SECRET;
 
 if (!JWT_SECRET) {
   throw new PhoenixStoreError(

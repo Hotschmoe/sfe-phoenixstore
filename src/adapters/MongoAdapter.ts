@@ -10,9 +10,9 @@ export class MongoAdapter implements DatabaseAdapter {
   private readonly dbName: string;
 
   constructor(uri: string, dbName: string) {
-    this.uri = uri;
-    this.dbName = dbName;
-    this.client = new MongoClient(uri);
+    this.uri = uri || config.MONGODB_URI;
+    this.dbName = dbName || config.MONGODB_DATABASE;
+    this.client = new MongoClient(this.uri);
   }
 
   async connect(): Promise<void> {

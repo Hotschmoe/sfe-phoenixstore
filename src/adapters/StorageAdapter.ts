@@ -20,11 +20,11 @@ export class StorageAdapter {
   private readonly storageUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {
-    // Build storage URL from components
-    this.storageUrl = customConfig?.url || `${config.STORAGE_PUBLIC_URL}:${config.STORAGE_PORT}`;
+    // Use the public URL from config
+    this.storageUrl = config.STORAGE_PUBLIC_URL;
     
     const finalConfig = {
-      endPoint: config.STORAGE_ENDPOINT, // Use the configured endpoint directly
+      endPoint: config.STORAGE_HOST,
       port: config.STORAGE_PORT,
       useSSL: customConfig?.useSSL ?? config.STORAGE_USE_SSL,
       accessKey: customConfig?.accessKey || config.STORAGE_ACCESS_KEY,
