@@ -1,34 +1,28 @@
-import { config as dotenvConfig } from 'dotenv';
-
-// Load environment variables from .env file
-dotenvConfig();
-
 interface Config {
-  // Environment
-  ENVIRONMENT: string;
-
-  // PhoenixStore Server Configuration (API)
-  PHOENIXSTORE_PROTOCOL: string;
-  PHOENIXSTORE_HOST: string;
-  PHOENIXSTORE_PORT: number;
-  PHOENIXSTORE_PUBLIC_URL: string;
-
-  // WebSocket Configuration
-  WEBSOCKET_PROTOCOL: string;
-  WEBSOCKET_HOST: string;
-  WEBSOCKET_PORT: number;
-  WEBSOCKET_PUBLIC_URL: string;
-
-  // Storage Configuration (MinIO)
-  STORAGE_PUBLIC_PROTOCOL: string;
-  STORAGE_PUBLIC_HOST: string;
-  STORAGE_PUBLIC_PORT: number;
-  STORAGE_PUBLIC_URL: string;
-}
-
-
-// Utility to build URLs consistently
-const buildUrl = (protocol: string, host: string, port: string | number): string => {
+    // Environment
+    ENVIRONMENT: string;
+  
+    // PhoenixStore Server Configuration (API)
+    PHOENIXSTORE_PROTOCOL: string;
+    PHOENIXSTORE_HOST: string;
+    PHOENIXSTORE_PORT: number;
+    PHOENIXSTORE_PUBLIC_URL: string;
+  
+    // WebSocket Configuration
+    WEBSOCKET_PROTOCOL: string;
+    WEBSOCKET_HOST: string;
+    WEBSOCKET_PORT: number;
+    WEBSOCKET_PUBLIC_URL: string;
+  
+    // Storage Configuration (MinIO)
+    STORAGE_PUBLIC_PROTOCOL: string;
+    STORAGE_PUBLIC_HOST: string;
+    STORAGE_PUBLIC_PORT: number;
+    STORAGE_PUBLIC_URL: string;
+  }
+  
+  // Utility to build URLs consistently
+  const buildUrl = (protocol: string, host: string, port: string | number): string => {
     if (!protocol || !host) {
       throw new Error('Protocol and host are required for URL construction');
     }
@@ -38,9 +32,9 @@ const buildUrl = (protocol: string, host: string, port: string | number): string
     }
     return `${protocol}://${host}:${portStr}`;
   };
-
+  
   // Validate required environment variables and throw errors if missing
-const validateConfig = (): void => {
+  const validateConfig = (): void => {
     const requiredVars: { [key: string]: string } = {
       // Environment
       ENVIRONMENT: process.env.ENVIRONMENT || '',
@@ -58,7 +52,7 @@ const validateConfig = (): void => {
       WEBSOCKET_PORT: process.env.WEBSOCKET_PORT || '',
       WEBSOCKET_PUBLIC_HOST: process.env.WEBSOCKET_PUBLIC_HOST || '',
       WEBSOCKET_PUBLIC_PORT: process.env.WEBSOCKET_PUBLIC_PORT || '',
-
+  
       // Storage
       STORAGE_PUBLIC_PROTOCOL: process.env.STORAGE_PUBLIC_PROTOCOL || '',
       STORAGE_PUBLIC_HOST: process.env.STORAGE_PUBLIC_HOST || '',
@@ -115,7 +109,7 @@ const validateConfig = (): void => {
       process.env.WEBSOCKET_PUBLIC_HOST!,
       process.env.WEBSOCKET_PUBLIC_PORT!
     ),
-
+  
     // Storage Configuration (MinIO)
     STORAGE_PUBLIC_PROTOCOL: process.env.STORAGE_PUBLIC_PROTOCOL!,
     STORAGE_PUBLIC_HOST: process.env.STORAGE_PUBLIC_HOST!,
