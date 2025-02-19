@@ -100,9 +100,12 @@ export function StorageOperations({ loading, currentFile, responses, onUpload, o
                             const isStorageMessage = 
                                 r.data?.url || 
                                 r.data?.path || 
-                                r.message?.includes('file upload') ||
-                                r.message?.includes('upload failed') ||
-                                r.message?.toLowerCase().includes('storage');
+                                r.message?.toLowerCase().includes('file upload') ||
+                                r.message?.toLowerCase().includes('upload failed') ||
+                                r.message?.toLowerCase().includes('storage') ||
+                                r.data?.filename ||
+                                r.data?.message?.toLowerCase().includes('file') ||
+                                r.data?.message?.toLowerCase().includes('upload');
                             return isStorageMessage;
                         })
                         .map((response, index) => (
