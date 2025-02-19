@@ -418,6 +418,10 @@ export class PhoenixApi {
       console.log(`[+] Homepage: http://localhost:${port}`);
       console.log(`[+] Swagger UI: http://localhost:${port}/swagger`);
       console.log(`[+] API Base: http://localhost:${port}/api/v1`);
+      console.log(`[+] MongoDB URL: ${config.MONGODB_HOST}:${config.MONGODB_PORT}`);
+      console.log(`[+] Storage URL: ${config.STORAGE_URL}:${config.STORAGE_PORT}`);
+      console.log(`[+] Storage Console: ${config.STORAGE_URL}:${config.STORAGE_CONSOLE_PORT}`);
+      console.log(`[+] Storage Endpoint: ${config.STORAGE_ENDPOINT}`);
     });
 
     // Start WebSocket server

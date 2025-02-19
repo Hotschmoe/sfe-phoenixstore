@@ -49,8 +49,8 @@ services:
       - STORAGE_SECRET_KEY=${STORAGE_SECRET_KEY}
       - STORAGE_USE_SSL=${STORAGE_USE_SSL}
       - STORAGE_REGION=${STORAGE_REGION}
-      - STORAGE_PUBLIC_URL=${STORAGE_PUBLIC_URL}      
-      # - STORAGE_PUBLIC_URL=http://localhost:${STORAGE_PORT}
+      # - STORAGE_PUBLIC_URL=${STORAGE_PUBLIC_URL}
+      - STORAGE_PUBLIC_URL=http://localhost:${STORAGE_PORT}
     env_file:
       - .env
     depends_on:

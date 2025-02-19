@@ -11,13 +11,13 @@ interface StorageConfig {
   accessKey: string;
   secretKey: string;
   region?: string;
-  publicUrl?: string;
+  url?: string;
 }
 
 export class StorageAdapter {
   private client: Client;
   public readonly defaultBucket: string;
-  private readonly publicUrl: string;
+  private readonly storageUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {
     const finalConfig = {
@@ -30,7 +30,8 @@ export class StorageAdapter {
     };
 
     this.client = new Client(finalConfig);
-    this.publicUrl = customConfig?.publicUrl || config.STORAGE_PUBLIC_URL;
+    // Build storage URL from components
+    this.storageUrl = customConfig?.url || `${config.STORAGE_URL}:${config.STORAGE_PORT}`;
     this.defaultBucket = config.STORAGE_BUCKET;
 
     // Ensure bucket exists on initialization
@@ -126,7 +127,7 @@ export class StorageAdapter {
         metadata: this.normalizeMetadata(stats.metaData, metadata),
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
-        url: `${this.publicUrl}/${bucket}/${path}`
+        url: `${this.storageUrl}/${bucket}/${path}`
       };
     } catch (error: any) {
       if (error instanceof PhoenixStoreError) throw error;
@@ -150,7 +151,7 @@ export class StorageAdapter {
         metadata: this.normalizeMetadata(stats.metaData),
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
-        url: `${this.publicUrl}/${bucket}/${path}`
+        url: `${this.storageUrl}/${bucket}/${path}`
       };
     } catch (error: any) {
       if (error.code === 'NotFound') {
