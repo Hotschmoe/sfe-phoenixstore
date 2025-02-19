@@ -39,9 +39,9 @@ describe("MongoAdapter", () => {
 
     test("should handle various invalid connection strings", async () => {
       const invalidUris = [
-        "invalid-uri",
-        "mongodb://invalid:invalid@localhost:27017",
-        "mongodb://localhost:1234" // Non-existent port
+        "mongodb://invalid:invalid@127.0.0.1:27017/nonexistentdb?authSource=admin",
+        "mongodb://wronguser:wrongpass@127.0.0.1:27017/testdb?authSource=admin",
+        "mongodb://127.0.0.1:27018/testdb" // Non-existent port
       ];
 
       for (const uri of invalidUris) {
