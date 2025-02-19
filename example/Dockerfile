@@ -12,12 +12,6 @@ RUN bun install
 # Copy source files and static assets
 COPY . .
 
-# Set build-time environment variables
-ARG PHOENIXSTORE_URL=http://localhost:3000
-ARG PHOENIXSTORE_WEBSOCKET=ws://localhost:3001
-ENV PHOENIXSTORE_URL=${PHOENIXSTORE_URL}
-ENV PHOENIXSTORE_WEBSOCKET=${PHOENIXSTORE_WEBSOCKET}
-
 # Build the application
 RUN mkdir -p dist && \
     bun run build && \

@@ -2,16 +2,34 @@ services:
   mock-frontend:
     build:
       context: .
-      args:
-        - PHOENIXSTORE_URL=${PHOENIXSTORE_API_URL:-http://localhost}:${PHOENIXSTORE_PORT:-3000}
-        - PHOENIXSTORE_WEBSOCKET=ws://${PHOENIXSTORE_API_URL:-localhost}:${WEBSOCKET_PORT:-3001}
     ports:
       - "${FRONTEND_PORT}:80"
     environment:
-      - PORT=80
-      - PHOENIXSTORE_URL=${PHOENIXSTORE_API_URL:-http://localhost}:${PHOENIXSTORE_PORT:-3000}
-      - PHOENIXSTORE_WEBSOCKET=ws://${PHOENIXSTORE_API_URL:-localhost}:${WEBSOCKET_PORT:-3001}
+      # Environment
+      - ENVIRONMENT=${ENVIRONMENT}
+      # Frontend Configuration
+      - FRONTEND_PORT=${FRONTEND_PORT}
+      - FRONTEND_HOST=${FRONTEND_HOST}
+      - FRONTEND_PROTOCOL=${FRONTEND_PROTOCOL}
+      # PhoenixStore Server Configuration
+      - PHOENIXSTORE_PROTOCOL=${PHOENIXSTORE_PROTOCOL}
+      - PHOENIXSTORE_HOST=${PHOENIXSTORE_HOST}
+      - PHOENIXSTORE_PORT=${PHOENIXSTORE_PORT}
+      - PHOENIXSTORE_PUBLIC_HOST=${PHOENIXSTORE_PUBLIC_HOST}
+      - PHOENIXSTORE_PUBLIC_PORT=${PHOENIXSTORE_PUBLIC_PORT}
+      # WebSocket Configuration
+      - WEBSOCKET_PROTOCOL=${WEBSOCKET_PROTOCOL}
+      - WEBSOCKET_HOST=${WEBSOCKET_HOST}
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT}
+      - WEBSOCKET_PUBLIC_HOST=${WEBSOCKET_PUBLIC_HOST}
+      - WEBSOCKET_PUBLIC_PORT=${WEBSOCKET_PUBLIC_PORT}
+      # JWT Configuration
       - JWT_SECRET=${JWT_SECRET}
+      # Storage Configuration (MinIO)
+      - STORAGE_PUBLIC_PROTOCOL=${STORAGE_PUBLIC_PROTOCOL}
+      - STORAGE_PUBLIC_HOST=${STORAGE_PUBLIC_HOST}
+      - STORAGE_PUBLIC_PORT=${STORAGE_PUBLIC_PORT}
+
     env_file:
       - .env
     depends_on:
@@ -20,37 +38,68 @@ services:
 
   phoenixstore:
     build:
-      # context: https://github.com/Hotschmoe/sfe-phoenixstore.git
-      # context: https://github.com/Hotschmoe/sfe-phoenixstore/tree/example-project.git
       context: ..
-      target: ${PHOENIXSTORE_ENV:-development}
+      # context: https://github.com/Hotschmoe/sfe-phoenixstore.git
+      target: ${ENVIRONMENT}
     ports:
       - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"
       - "${WEBSOCKET_PORT}:${WEBSOCKET_PORT}"
     environment:
+      # Environment
+      - ENVIRONMENT=${ENVIRONMENT}
+      
+      # MongoDB Configuration
+      - MONGODB_PROTOCOL=${MONGODB_PROTOCOL}
       - MONGODB_HOST=${MONGODB_HOST}
       - MONGODB_PORT=${MONGODB_PORT}
       - MONGODB_DATABASE=${MONGODB_DATABASE}
       - MONGODB_USER=${MONGODB_USER}
       - MONGODB_PASSWORD=${MONGODB_PASSWORD}
-      - PORT=${PHOENIXSTORE_PORT}
-      - API_URL=${PHOENIXSTORE_API_URL}:${PHOENIXSTORE_PORT}
+
+      # PhoenixStore Server Configuration
+      - PHOENIXSTORE_PROTOCOL=${PHOENIXSTORE_PROTOCOL}
+      - PHOENIXSTORE_HOST=${PHOENIXSTORE_HOST}
+      - PHOENIXSTORE_PORT=${PHOENIXSTORE_PORT}
+      - PHOENIXSTORE_PUBLIC_HOST=${PHOENIXSTORE_PUBLIC_HOST}
+      - PHOENIXSTORE_PUBLIC_PORT=${PHOENIXSTORE_PUBLIC_PORT}
+
+      # WebSocket Configuration
+      - WEBSOCKET_PROTOCOL=${WEBSOCKET_PROTOCOL}
+      - WEBSOCKET_HOST=${WEBSOCKET_HOST}
       - WEBSOCKET_PORT=${WEBSOCKET_PORT}
+      - WEBSOCKET_PUBLIC_HOST=${WEBSOCKET_PUBLIC_HOST}
+      - WEBSOCKET_PUBLIC_PORT=${WEBSOCKET_PUBLIC_PORT}
       - WEBSOCKET_HEARTBEAT_INTERVAL=${WEBSOCKET_HEARTBEAT_INTERVAL}
       - WEBSOCKET_MAX_CLIENTS=${WEBSOCKET_MAX_CLIENTS}
       - WEBSOCKET_PING_TIMEOUT=${WEBSOCKET_PING_TIMEOUT}
+
+      # JWT Configuration
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN}
       - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
-      # Storage configuration
-      - STORAGE_ENDPOINT=${STORAGE_ENDPOINT}
+
+      # SMTP Configuration
+      - SMTP_PROTOCOL=${SMTP_PROTOCOL}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME}
+
+      # Storage Configuration (MinIO)
+      - STORAGE_PROTOCOL=${STORAGE_PROTOCOL}
+      - STORAGE_HOST=${STORAGE_HOST}
       - STORAGE_PORT=${STORAGE_PORT}
+      - STORAGE_PUBLIC_PROTOCOL=${STORAGE_PUBLIC_PROTOCOL}
+      - STORAGE_PUBLIC_HOST=${STORAGE_PUBLIC_HOST}
+      - STORAGE_PUBLIC_PORT=${STORAGE_PUBLIC_PORT}
+      - STORAGE_CONSOLE_PORT=${STORAGE_CONSOLE_PORT}
       - STORAGE_ACCESS_KEY=${STORAGE_ACCESS_KEY}
       - STORAGE_SECRET_KEY=${STORAGE_SECRET_KEY}
       - STORAGE_USE_SSL=${STORAGE_USE_SSL}
       - STORAGE_REGION=${STORAGE_REGION}
-      # - STORAGE_PUBLIC_URL=${STORAGE_PUBLIC_URL}
-      - STORAGE_PUBLIC_URL=http://localhost:${STORAGE_PORT}
+      - STORAGE_BUCKET=${STORAGE_BUCKET}
     env_file:
       - .env
     depends_on:
@@ -82,13 +131,15 @@ services:
   mongo-express:
     image: mongo-express
     ports:
-      - "8081:8081"
+      - "${MONGOEXPRESS_PORT}:8081"
     environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${ME_CONFIG_MONGODB_ADMINUSERNAME}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD}
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DATABASE}?authSource=admin
-      ME_CONFIG_BASICAUTH_USERNAME: ${ME_CONFIG_MONGODB_ADMINUSERNAME}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${ME_CONFIG_MONGODB_ADMINPASSWORD}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGOEXPRESS_ADMIN_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGOEXPRESS_ADMIN_PASSWORD}
+      ME_CONFIG_MONGODB_URL: ${MONGODB_PROTOCOL}://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DATABASE}?authSource=admin
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGOEXPRESS_ADMIN_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGOEXPRESS_ADMIN_PASSWORD}
+    env_file:
+      - .env
     depends_on:
       mongodb:
         condition: service_healthy
@@ -122,7 +173,7 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc config host add myminio http://minio:9000 ${STORAGE_ACCESS_KEY} ${STORAGE_SECRET_KEY};
+      /usr/bin/mc config host add myminio ${STORAGE_PROTOCOL}://minio:9000 ${STORAGE_ACCESS_KEY} ${STORAGE_SECRET_KEY};
       /usr/bin/mc mb myminio/phoenixstore;
       /usr/bin/mc anonymous set public myminio/phoenixstore;
       exit 0;

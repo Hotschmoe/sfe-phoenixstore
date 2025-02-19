@@ -4,14 +4,12 @@ import { WebSocketOperations } from './components/WebSocketOperations';
 import { StorageOperations } from './components/StorageOperations';
 import { QueryOperations } from './components/QueryOperations';
 import { ResponseData, WebSocketMessage, AuthTokens } from './types';
+import { config } from './config';
 
-// Use environment variables for API and WebSocket URLs
-// const API_BASE_URL = `${process.env.PHOENIXSTORE_API_URL || 'http://localhost'}:${process.env.PHOENIXSTORE_PORT || '3000'}/api/v1`;
-// const WS_URL = `ws://${(process.env.PHOENIXSTORE_API_URL || 'http://localhost').replace('http://', '')}:${process.env.WEBSOCKET_PORT || '3001'}`;
-const API_BASE_URL = 'http://localhost:3000/api/v1';
-const WS_URL = 'ws://localhost:3001';
-const STORAGE_URL = 'http://localhost:9000'; // MinIO API endpoint
-
+// Use configuration for API and WebSocket URLs
+const API_BASE_URL = `${config.PHOENIXSTORE_PUBLIC_URL}/api/v1`;
+const WS_URL = config.WEBSOCKET_PUBLIC_URL;
+const STORAGE_URL = `${config.STORAGE_PUBLIC_URL}`;
 // Helper function to generate request IDs
 const generateRequestId = () => Math.random().toString(36).substring(2, 15);
 
@@ -233,7 +231,9 @@ export function App() {
                 timestamp: new Date().toISOString()
             });
 
-            const response = await fetch(`${API_BASE_URL}/storage/upload/${filename}`, {
+            // Use storage configuration from config
+            const uploadEndpoint = `${API_BASE_URL}/storage/upload/${filename}`;
+            const response = await fetch(uploadEndpoint, {
                 method: 'POST',
                 body: file,
                 headers: {
@@ -248,9 +248,14 @@ export function App() {
             const result = await response.json();
             if (result.status === 'success') {
                 setCurrentFile(filename);
+                // Include the storage URL in the response for reference
                 addResponse({
                     status: 'success',
-                    data: { message: 'File uploaded successfully', filename },
+                    data: { 
+                        message: 'File uploaded successfully', 
+                        filename,
+                        storageUrl: `${STORAGE_URL}/${filename}`
+                    },
                     timestamp: new Date().toISOString()
                 });
             } else {
@@ -286,37 +291,22 @@ export function App() {
             });
 
             const downloadEndpoint = `${API_BASE_URL}/storage/download/${encodeURIComponent(currentFile)}`;
-            console.log('Requesting download URL from:', downloadEndpoint);
-
+            
             // First get a presigned URL from our API
             const response = await fetch(downloadEndpoint);
             const result = await response.json();
             
-            // Log the full response for debugging
-            addResponse({
-                status: 'success',
-                data: { 
-                    message: 'Download response received',
-                    endpoint: downloadEndpoint,
-                    responseStatus: response.status,
-                    responseData: result
-                },
-                timestamp: new Date().toISOString()
-            });
-
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             if (result.status === 'success' && result.data?.url) {
-                // Use the presigned URL directly
                 const downloadUrl = result.data.url;
-                console.log('Received download URL:', downloadUrl);
                 
                 // For direct download, create a temporary link
                 const link = document.createElement('a');
                 link.href = downloadUrl;
-                link.download = currentFile; // Suggest the original filename
+                link.download = currentFile;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -334,7 +324,6 @@ export function App() {
                 throw new Error(`Failed to get download URL: ${JSON.stringify(result)}`);
             }
         } catch (error) {
-            console.error('Download error:', error);
             addResponse({
                 status: 'error',
                 data: {
