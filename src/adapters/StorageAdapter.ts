@@ -24,7 +24,7 @@ export class StorageAdapter {
     this.storageUrl = customConfig?.url || `${config.STORAGE_URL}:${config.STORAGE_PORT}`;
     
     const finalConfig = {
-      endPoint: config.STORAGE_ENDPOINT, // Use the internal endpoint for client operations
+      endPoint: config.STORAGE_ENDPOINT, // Use the configured endpoint directly
       port: config.STORAGE_PORT,
       useSSL: customConfig?.useSSL ?? config.STORAGE_USE_SSL,
       accessKey: customConfig?.accessKey || config.STORAGE_ACCESS_KEY,
@@ -39,7 +39,8 @@ export class StorageAdapter {
     console.log('[Storage] Configuration:', {
       endPoint: finalConfig.endPoint,
       port: finalConfig.port,
-      publicUrl: this.storageUrl
+      publicUrl: this.storageUrl,
+      bucket: this.defaultBucket
     });
 
     // Ensure bucket exists on initialization
@@ -111,6 +112,14 @@ export class StorageAdapter {
         throw new PhoenixStoreError('storage/bucket-not-found', 'Specified bucket does not exist');
       }
 
+      // Log upload attempt for debugging
+      console.log('[Storage] Attempting upload:', {
+        bucket,
+        path,
+        contentType,
+        size: file instanceof Buffer ? file.length : Buffer.from(file).length
+      });
+
       // Upload file
       await this.client.putObject(
         bucket,
@@ -126,6 +135,9 @@ export class StorageAdapter {
       // Get file stats
       const stats = await this.client.statObject(bucket, path);
       
+      const fileUrl = `${this.storageUrl}/${bucket}/${path}`;
+      console.log('[Storage] Upload successful:', { fileUrl });
+
       return {
         name: path.split('/').pop() || path,
         bucket,
@@ -135,9 +147,10 @@ export class StorageAdapter {
         metadata: this.normalizeMetadata(stats.metaData, metadata),
         createdAt: stats.lastModified.toISOString(),
         updatedAt: stats.lastModified.toISOString(),
-        url: `${this.storageUrl}/${bucket}/${path}`
+        url: fileUrl
       };
     } catch (error: any) {
+      console.error('[Storage] Upload failed:', error);
       if (error instanceof PhoenixStoreError) throw error;
       throw new PhoenixStoreError('storage/upload-failed', `Failed to upload file: ${error.message}`);
     }
@@ -194,14 +207,19 @@ export class StorageAdapter {
     expires: number = 3600
   ): Promise<string> {
     try {
-      // Get the presigned URL from MinIO using the internal endpoint
-      const minioUrl = await this.client.presignedGetObject(bucket, path, expires);
+      // Get the presigned URL from MinIO
+      const presignedUrl = await this.client.presignedGetObject(bucket, path, expires);
       
-      // Parse the internal URL
-      const url = new URL(minioUrl);
+      // Create a new URL with the public hostname and port
+      const url = new URL(presignedUrl);
+      const publicUrl = new URL(this.storageUrl);
       
-      // Create a new URL with our public endpoint but keep the same path and query
-      return `${this.storageUrl}/${bucket}/${path}${url.search}`;
+      // Replace the hostname and port while keeping the path and query parameters
+      url.protocol = publicUrl.protocol;
+      url.hostname = publicUrl.hostname;
+      url.port = publicUrl.port;
+      
+      return url.toString();
     } catch (error: any) {
       throw new PhoenixStoreError('storage/invalid-url', `Failed to generate download URL: ${error.message}`);
     }
@@ -219,6 +237,14 @@ export class StorageAdapter {
       const contentType = options.contentType || this.getContentType(path);
       const expirySeconds = options.expires || 3600;
 
+      // Log presigned URL request for debugging
+      console.log('[Storage] Generating presigned upload URL:', {
+        bucket,
+        path,
+        contentType,
+        expirySeconds
+      });
+
       // Create post policy
       const policy = this.client.newPostPolicy();
       policy.setKey(path);
@@ -227,6 +253,12 @@ export class StorageAdapter {
       policy.setExpires(new Date(Date.now() + expirySeconds * 1000));
 
       const result = await this.client.presignedPostPolicy(policy);
+
+      // Log the generated URL for debugging
+      console.log('[Storage] Generated presigned upload URL:', {
+        postURL: result.postURL,
+        fields: Object.keys(result.formData)
+      });
 
       return {
         url: result.postURL,
@@ -238,6 +270,7 @@ export class StorageAdapter {
         }
       };
     } catch (error: any) {
+      console.error('[Storage] Failed to generate upload URL:', error);
       throw new PhoenixStoreError('storage/invalid-url', `Failed to generate upload URL: ${error.message}`);
     }
   }
