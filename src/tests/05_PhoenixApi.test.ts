@@ -291,13 +291,13 @@ describe("PhoenixApi", () => {
     });
 
     test("should support offset", async () => {
-      // First get all results ordered by name
+      // First get all results ordered by name and id for consistent ordering
       const allResponse = await fetch(
         `${BASE_URL}/api/v1/${collection}?orderBy=name:asc`
       );
       const allResult = await allResponse.json();
 
-      // Then get results with offset
+      // Then get results with offset, using same ordering
       const offset = 2;
       const response = await fetch(
         `${BASE_URL}/api/v1/${collection}?orderBy=name:asc&offset=${offset}`
@@ -306,7 +306,14 @@ describe("PhoenixApi", () => {
       
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
+      // Verify we got the correct slice of data
+      expect(result.data.length).toBe(allResult.data.length - offset);
       expect(result.data[0].data.name).toBe(allResult.data[offset].data.name);
+      
+      // Verify the ordering is maintained
+      const allNames = allResult.data.map((doc: any) => doc.data.name);
+      const offsetNames = result.data.map((doc: any) => doc.data.name);
+      expect(offsetNames).toEqual(allNames.slice(offset));
     });
 
     test("should support multiple where conditions", async () => {
@@ -316,20 +323,15 @@ describe("PhoenixApi", () => {
       ]));
       
       const url = `${BASE_URL}/api/v1/${collection}?filter=${filter}`;
-      console.log('Debug - Query URL:', url);
-      console.log('Debug - Decoded URL:', decodeURIComponent(url));
       
       const response = await fetch(url);
       const result = await response.json();
-      
-      console.log('Debug - Response:', JSON.stringify(result, null, 2));
       
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
       expect(result.data.length).toBeGreaterThan(0);
       result.data.forEach((doc: any) => {
         const data = doc.data;
-        console.log('Debug - Document:', JSON.stringify(data, null, 2));
         expect(data.age).toBeGreaterThanOrEqual(25);
         expect(data.city).toBe("London");
       });

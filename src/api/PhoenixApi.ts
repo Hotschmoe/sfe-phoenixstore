@@ -48,7 +48,6 @@ export class PhoenixApi {
   }
 
   private parseQueryParams(query: any) {
-    console.log('Debug - Raw query params:', JSON.stringify(query, null, 2));
     const conditions = [];
     const options: { orderBy?: string; orderDirection?: 'asc' | 'desc'; limit?: number; offset?: number } = {};
 
@@ -56,7 +55,6 @@ export class PhoenixApi {
     if (query.filter) {
       try {
         const filter = JSON.parse(decodeURIComponent(query.filter));
-        console.log('Debug - Parsed filter:', JSON.stringify(filter, null, 2));
         
         if (Array.isArray(filter)) {
           for (const condition of filter) {
@@ -190,9 +188,6 @@ export class PhoenixApi {
     // Query collection
     this.app.get('/api/v1/:collection', async ({ params, query }) => {
       try {
-        console.log('\nDebug - Query endpoint called');
-        console.log('Debug - Collection:', params.collection);
-        
         const collection = this.store.collection<DocumentData>(params.collection);
         const { conditions, options } = this.parseQueryParams(query);
         
@@ -205,8 +200,6 @@ export class PhoenixApi {
           // Build query using Firestore-like chaining
           let queryBuilder: CollectionQuery<DocumentData>;
           
-          console.log('Debug - Building query with conditions:', JSON.stringify(conditions, null, 2));
-          
           // Start with first condition or orderBy
           if (conditions.length > 0) {
             queryBuilder = collection.where(
@@ -214,12 +207,10 @@ export class PhoenixApi {
               conditions[0].operator,
               conditions[0].value
             );
-            console.log('Debug - Initial where condition:', JSON.stringify(conditions[0], null, 2));
             
             // Add remaining conditions
             for (let i = 1; i < conditions.length; i++) {
               const condition = conditions[i];
-              console.log('Debug - Adding where condition:', JSON.stringify(condition, null, 2));
               queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
             }
           } else if (options.orderBy) {
@@ -237,11 +228,14 @@ export class PhoenixApi {
           if (options.limit) {
             queryBuilder = queryBuilder.limit(options.limit);
           }
+
+          // Apply offset if specified
+          if (options.offset) {
+            queryBuilder = queryBuilder.offset(options.offset);
+          }
           
           // Execute query
-          console.log('Debug - Executing query...');
           results = await queryBuilder.get();
-          console.log('Debug - Query results count:', results.length);
         }
 
         // Format response to match Firestore structure
@@ -255,7 +249,6 @@ export class PhoenixApi {
           data: formattedResults
         };
       } catch (error) {
-        console.error('Debug - Query error:', error);
         return this.handleError(error);
       }
     });
