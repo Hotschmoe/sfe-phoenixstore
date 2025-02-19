@@ -226,6 +226,19 @@ export function App() {
         }
     };
 
+    const testFileUpload = async () => {
+        const file = new Blob(['Hello, MinIO from React!'], { type: 'text/plain' });
+        const response = await fetch('http://localhost:3000/api/v1/storage/upload/test-from-react.txt', {
+            method: 'POST',
+            body: file,
+            headers: {
+                'Content-Type': 'text/plain'
+            }
+        });
+        const result = await response.json();
+        console.log('File upload result:', result);
+    };
+
     const testOperations = [
         {
             name: 'Register User',
@@ -366,6 +379,9 @@ export function App() {
                             {loading ? 'Loading...' : op.name}
                         </button>
                     ))}
+                    <button onClick={() => testFileUpload()}>
+                        Test File Upload
+                    </button>
                 </div>
 
                 {/* Right side response display */}

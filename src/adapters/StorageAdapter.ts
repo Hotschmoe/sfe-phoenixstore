@@ -16,7 +16,7 @@ interface StorageConfig {
 
 export class StorageAdapter {
   private client: Client;
-  private readonly defaultBucket: string;
+  public readonly defaultBucket: string;
   private readonly publicUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {

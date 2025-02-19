@@ -7,6 +7,7 @@ import { homeHtml } from './home';
 import { swaggerPlugin } from './PhoenixSwagger';
 import { AuthManager } from '../core/AuthManager';
 import { MongoAdapter } from '../adapters/MongoAdapter';
+import { StorageAdapter } from '../adapters/StorageAdapter';
 import { config } from '../utils/config';
 
 /**
@@ -23,6 +24,7 @@ export class PhoenixApi {
   private app: Elysia;
   private store: PhoenixStore;
   private authManager: AuthManager;
+  private storageAdapter: StorageAdapter;
   private wsServer: WebSocketServer | null = null;
 
   constructor(store: PhoenixStore) {
@@ -33,6 +35,9 @@ export class PhoenixApi {
 
     // Initialize AuthManager with the same database adapter
     this.authManager = new AuthManager(store.getAdapter() as MongoAdapter);
+    
+    // Initialize StorageAdapter
+    this.storageAdapter = new StorageAdapter();
 
     this.setupRoutes();
   }
@@ -264,6 +269,100 @@ export class PhoenixApi {
         const collection = this.store.collection(params.collection);
         await collection.doc(params.id).delete();
         return { status: 'success' };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    // Storage endpoints
+    this.app.post('/api/v1/storage/upload/:path', async ({ params, body, headers }) => {
+      try {
+        const contentType = headers['content-type'] || 'application/octet-stream';
+        const file = body as Buffer;
+        const options = {
+          contentType,
+          metadata: {
+            uploadedBy: 'api',
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        const result = await this.storageAdapter.uploadFile(file, params.path, options);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/info/:path', async ({ params }) => {
+      try {
+        const result = await this.storageAdapter.getFileInfo(this.storageAdapter.defaultBucket, params.path);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.delete('/api/v1/storage/:path', async ({ params }) => {
+      try {
+        await this.storageAdapter.deleteFile(this.storageAdapter.defaultBucket, params.path);
+        return { status: 'success' };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/download/:path', async ({ params }) => {
+      try {
+        const url = await this.storageAdapter.getPresignedDownloadUrl(
+          this.storageAdapter.defaultBucket,
+          params.path,
+          3600 // 1 hour expiry
+        );
+        return {
+          status: 'success',
+          data: { url }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/upload-url/:path', async ({ params, query }) => {
+      try {
+        const options = {
+          contentType: query.contentType as string,
+          expires: parseInt(query.expires as string) || 3600
+        };
+
+        const result = await this.storageAdapter.getPresignedUploadUrl(params.path, options);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/list/:prefix?', async ({ params, query }) => {
+      try {
+        const options = {
+          maxResults: parseInt(query.maxResults as string) || 1000,
+          pageToken: query.pageToken as string
+        };
+
+        const result = await this.storageAdapter.list(params.prefix || '', options);
+        return {
+          status: 'success',
+          data: result
+        };
       } catch (error) {
         return this.handleError(error);
       }
