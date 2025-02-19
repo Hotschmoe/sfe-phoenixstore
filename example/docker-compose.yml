@@ -21,7 +21,8 @@ services:
   phoenixstore:
     build:
       # context: https://github.com/Hotschmoe/sfe-phoenixstore.git
-      context: https://github.com/Hotschmoe/sfe-phoenixstore/tree/example-project
+      # context: https://github.com/Hotschmoe/sfe-phoenixstore/tree/example-project.git
+      context: ..
       target: ${PHOENIXSTORE_ENV:-development}
     ports:
       - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"

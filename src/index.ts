@@ -1,13 +1,12 @@
 import { config } from './utils/config';
 import { PhoenixStore } from './core/PhoenixStore';
 import { PhoenixApi } from './api/PhoenixApi';
+import { MongoAdapter } from './adapters/MongoAdapter';
 export * from './types';
 
 // Create and export the default instance
-const defaultStore = new PhoenixStore(
-  config.MONGODB_URI,
-  config.MONGODB_DATABASE
-);
+const adapter = new MongoAdapter(config.MONGODB_URI, config.MONGODB_DATABASE);
+const defaultStore = new PhoenixStore(adapter);
 
 // Export the PhoenixStore class for custom instances
 export { PhoenixStore };
@@ -17,7 +16,7 @@ export default defaultStore;
 const isMainModule = process.argv[1] === import.meta.url || process.argv[1]?.endsWith('index.ts');
 if (isMainModule) {
   console.log('Starting Phoenix Store Server...');
-  console.log('Environment:', config.NODE_ENV);
+  console.log('Environment:', process.env.PHOENIXSTORE_ENV || 'development');
   console.log('MongoDB URI:', config.MONGODB_URI);
   console.log('Database:', config.MONGODB_DATABASE);
   console.log('Port:', config.PORT);
