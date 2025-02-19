@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { WebSocket as WS, WebSocketServer } from 'ws';
-import { PhoenixStore } from '../core/PhoenixStore';
+import { PhoenixStore, CollectionQuery } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
 import { swaggerPlugin } from './PhoenixSwagger';
@@ -64,29 +64,50 @@ export class PhoenixApi {
         }
         
         // Validate operator
-        if (!['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in'].includes(operator)) {
+        const validOperators = [
+          '==', '!=', '<', '<=', '>', '>=', 
+          'in', 'not-in', 
+          'array-contains', 'array-contains-any'
+        ];
+        
+        if (!validOperators.includes(operator)) {
           throw new PhoenixStoreError(
-            `Invalid operator: ${operator}`,
+            `Invalid operator: ${operator}. Valid operators are: ${validOperators.join(', ')}`,
             'INVALID_QUERY_PARAMS'
           );
         }
 
-        // Parse value based on type
+        // Parse value based on type and operator
         let parsedValue = value;
-        if (value.startsWith('[') && value.endsWith(']')) {
-          // Parse array values for 'in' and 'not-in' operators
-          try {
-            parsedValue = JSON.parse(value);
-          } catch {
+        
+        // Handle array operators
+        if (['in', 'not-in', 'array-contains-any'].includes(operator)) {
+          if (!value.startsWith('[') || !value.endsWith(']')) {
             throw new PhoenixStoreError(
-              'Invalid array format in where condition',
+              `Operator ${operator} requires an array value in format [value1,value2,...]`,
               'INVALID_QUERY_PARAMS'
             );
           }
-        } else if (value === 'true' || value === 'false') {
-          parsedValue = value === 'true';
-        } else if (!isNaN(Number(value))) {
-          parsedValue = Number(value);
+          try {
+            parsedValue = JSON.parse(value);
+            if (!Array.isArray(parsedValue)) {
+              throw new Error('Value must be an array');
+            }
+          } catch (error) {
+            throw new PhoenixStoreError(
+              `Invalid array format for operator ${operator}. Expected [value1,value2,...]`,
+              'INVALID_QUERY_PARAMS'
+            );
+          }
+        } else {
+          // Parse non-array values
+          if (value === 'true' || value === 'false') {
+            parsedValue = value === 'true';
+          } else if (!isNaN(Number(value)) && value !== '') {
+            parsedValue = Number(value);
+          } else if (value === 'null') {
+            parsedValue = null;
+          }
         }
 
         conditions.push({
@@ -97,19 +118,20 @@ export class PhoenixApi {
       }
     }
 
-    // Parse orderBy
+    // Parse orderBy (support multiple orderBy fields)
     if (query.orderBy) {
-      const [field, direction] = query.orderBy.split(':');
-      options.orderBy = field;
-      options.orderDirection = (direction?.toLowerCase() || 'asc') as 'asc' | 'desc';
+      const orderByFields = Array.isArray(query.orderBy) ? query.orderBy : [query.orderBy];
+      const firstOrderBy = orderByFields[0].split(':');
+      options.orderBy = firstOrderBy[0];
+      options.orderDirection = (firstOrderBy[1]?.toLowerCase() || 'asc') as 'asc' | 'desc';
     }
 
-    // Parse pagination
+    // Parse pagination (startAfter/endBefore for cursor-based pagination)
     if (query.limit) {
       const limit = parseInt(query.limit);
-      if (isNaN(limit) || limit < 1) {
+      if (isNaN(limit) || limit < 1 || limit > 1000) {
         throw new PhoenixStoreError(
-          'Invalid limit parameter',
+          'Invalid limit parameter. Must be between 1 and 1000',
           'INVALID_QUERY_PARAMS'
         );
       }
@@ -120,7 +142,7 @@ export class PhoenixApi {
       const offset = parseInt(query.offset);
       if (isNaN(offset) || offset < 0) {
         throw new PhoenixStoreError(
-          'Invalid offset parameter',
+          'Invalid offset parameter. Must be non-negative',
           'INVALID_QUERY_PARAMS'
         );
       }
@@ -184,35 +206,60 @@ export class PhoenixApi {
     // Query collection
     this.app.get('/api/v1/:collection', async ({ params, query }) => {
       try {
-        const collection = this.store.collection(params.collection);
+        const collection = this.store.collection<DocumentData>(params.collection);
         const { conditions, options } = this.parseQueryParams(query);
         
-        // Start with first condition or orderBy to get Query object
-        let queryBuilder = conditions.length > 0
-          ? collection.where(conditions[0].field, conditions[0].operator, conditions[0].value)
-          : collection.orderBy(options.orderBy || 'id', options.orderDirection);
+        let results: DocumentData[];
+        
+        // If no conditions or options, do a simple collection query
+        if (conditions.length === 0 && !options.orderBy && !options.limit) {
+          results = await collection.query([]);
+        } else {
+          // Build query using Firestore-like chaining
+          let queryBuilder: CollectionQuery<DocumentData>;
+          
+          // Start with first condition or orderBy
+          if (conditions.length > 0) {
+            queryBuilder = collection.where(
+              conditions[0].field,
+              conditions[0].operator,
+              conditions[0].value
+            );
+            
+            // Add remaining conditions
+            for (let i = 1; i < conditions.length; i++) {
+              const condition = conditions[i];
+              queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
+            }
+          } else if (options.orderBy) {
+            queryBuilder = collection.orderBy(options.orderBy, options.orderDirection || 'asc');
+          } else {
+            queryBuilder = collection.orderBy('id', 'asc');
+          }
+          
+          // Apply orderBy if specified and not already applied
+          if (options.orderBy && conditions.length > 0) {
+            queryBuilder = queryBuilder.orderBy(options.orderBy, options.orderDirection || 'asc');
+          }
+          
+          // Apply limit if specified
+          if (options.limit) {
+            queryBuilder = queryBuilder.limit(options.limit);
+          }
+          
+          // Execute query
+          results = await queryBuilder.get();
+        }
 
-        // Add remaining conditions
-        for (let i = 1; i < conditions.length; i++) {
-          const condition = conditions[i];
-          queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
-        }
-        
-        // Add remaining options
-        if (options.orderBy && conditions.length > 0) {
-          queryBuilder = queryBuilder.orderBy(options.orderBy, options.orderDirection);
-        }
-        if (options.limit) {
-          queryBuilder = queryBuilder.limit(options.limit);
-        }
-        if (options.offset) {
-          queryBuilder = queryBuilder.offset(options.offset);
-        }
-        
-        const results = await queryBuilder.get();
+        // Format response to match Firestore structure
+        const formattedResults = results.map((doc: DocumentData & { id?: string }) => ({
+          id: doc.id || null,
+          data: doc
+        }));
+
         return {
           status: 'success',
-          data: results
+          data: formattedResults
         };
       } catch (error) {
         return this.handleError(error);
@@ -224,7 +271,13 @@ export class PhoenixApi {
       try {
         const collection = this.store.collection(params.collection);
         const id = await collection.add(body as DocumentData);
-        return { id, status: 'success' };
+        return { 
+          status: 'success',
+          data: { 
+            id,
+            path: `${params.collection}/${id}`
+          }
+        };
       } catch (error) {
         return this.handleError(error);
       }
@@ -249,7 +302,8 @@ export class PhoenixApi {
           status: 'success',
           data: {
             id: params.id,
-            ...data
+            path: `${params.collection}/${params.id}`,
+            data
           }
         };
       } catch (error) {
@@ -262,7 +316,13 @@ export class PhoenixApi {
       try {
         const collection = this.store.collection(params.collection);
         await collection.doc(params.id).update(body as DocumentData);
-        return { status: 'success' };
+        return { 
+          status: 'success',
+          data: {
+            id: params.id,
+            path: `${params.collection}/${params.id}`
+          }
+        };
       } catch (error) {
         return this.handleError(error);
       }
@@ -273,7 +333,13 @@ export class PhoenixApi {
       try {
         const collection = this.store.collection(params.collection);
         await collection.doc(params.id).delete();
-        return { status: 'success' };
+        return { 
+          status: 'success',
+          data: {
+            id: params.id,
+            path: `${params.collection}/${params.id}`
+          }
+        };
       } catch (error) {
         return this.handleError(error);
       }

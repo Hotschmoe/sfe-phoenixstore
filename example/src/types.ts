@@ -1,20 +1,21 @@
-export type ResponseData = {
+export interface ResponseData {
     status: 'success' | 'error';
     data?: any;
     message?: string;
     timestamp: string;
-};
+    operation?: 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'QUERY' | 'REGISTER' | 'LOGIN';
+}
 
-export type WebSocketMessage = {
+export interface WebSocketMessage {
     type: string;
     requestId: string;
     data?: any;
     message?: string;
     timestamp: string;
-};
+}
 
-export type AuthTokens = {
+export interface AuthTokens {
     accessToken: string;
     refreshToken: string;
     expiresIn: number;
-}; 
+} 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ApiOperations } from './components/ApiOperations';
 import { WebSocketOperations } from './components/WebSocketOperations';
 import { StorageOperations } from './components/StorageOperations';
+import { QueryOperations } from './components/QueryOperations';
 import { ResponseData, WebSocketMessage, AuthTokens } from './types';
 
 // TODO: Replace hardcoded URLs with environment variables once deployment configuration is fixed
@@ -305,6 +306,11 @@ export function App() {
             <ApiOperations
                 loading={loading}
                 currentDocId={currentDocId}
+                responses={responses}
+                onTestEndpoint={testEndpoint}
+            />
+            <QueryOperations
+                loading={loading}
                 responses={responses}
                 onTestEndpoint={testEndpoint}
             />

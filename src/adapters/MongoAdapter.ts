@@ -124,51 +124,68 @@ export class MongoAdapter implements DatabaseAdapter {
   }
 
   private buildFilter(conditions: { field: string; operator: QueryOperator; value: any }[]): Filter<Document> {
-    const filter: Record<string, any> = {};
-    
-    for (const { field, operator, value } of conditions) {
-      switch (operator) {
-        case '==':
-          filter[field] = { $eq: value };
-          break;
-        case '!=':
-          filter[field] = { $ne: value };
-          break;
-        case '<':
-          filter[field] = { $lt: value };
-          break;
-        case '<=':
-          filter[field] = { $lte: value };
-          break;
-        case '>':
-          filter[field] = { $gt: value };
-          break;
-        case '>=':
-          filter[field] = { $gte: value };
-          break;
-        case 'in':
-          filter[field] = { $in: value };
-          break;
-        case 'not-in':
-          filter[field] = { $nin: value };
-          break;
-        case 'array-contains':
-          // Use $elemMatch for single value array containment
-          filter[field] = { $elemMatch: { $eq: value } };
-          break;
-        case 'array-contains-any':
-          // Use $in for checking if array contains any of the values
-          filter[field] = { $in: value };
-          break;
-        default:
-          throw new PhoenixStoreError(
-            `Unsupported operator: ${operator}`,
-            'INVALID_OPERATOR'
-          );
-      }
+    if (conditions.length === 0) {
+      return {};
     }
-    
-    return filter;
+
+    // Group conditions by field
+    const conditionsByField = conditions.reduce((acc, condition) => {
+      const { field, operator, value } = condition;
+      if (!acc[field]) {
+        acc[field] = [];
+      }
+      acc[field].push({ operator, value });
+      return acc;
+    }, {} as Record<string, { operator: QueryOperator; value: any }[]>);
+
+    // Build filter with $and for multiple conditions on the same field
+    const filters = Object.entries(conditionsByField).map(([field, fieldConditions]) => {
+      if (fieldConditions.length === 1) {
+        // Single condition for this field
+        const { operator, value } = fieldConditions[0];
+        return this.buildSingleCondition(field, operator, value);
+      } else {
+        // Multiple conditions for this field - use $and
+        return {
+          $and: fieldConditions.map(({ operator, value }) => 
+            this.buildSingleCondition(field, operator, value)
+          )
+        };
+      }
+    });
+
+    // Combine all filters with $and
+    return filters.length === 1 ? filters[0] : { $and: filters };
+  }
+
+  private buildSingleCondition(field: string, operator: QueryOperator, value: any): Filter<Document> {
+    switch (operator) {
+      case '==':
+        return { [field]: { $eq: value } };
+      case '!=':
+        return { [field]: { $ne: value } };
+      case '<':
+        return { [field]: { $lt: value } };
+      case '<=':
+        return { [field]: { $lte: value } };
+      case '>':
+        return { [field]: { $gt: value } };
+      case '>=':
+        return { [field]: { $gte: value } };
+      case 'in':
+        return { [field]: { $in: value } };
+      case 'not-in':
+        return { [field]: { $nin: value } };
+      case 'array-contains':
+        return { [field]: { $elemMatch: { $eq: value } } };
+      case 'array-contains-any':
+        return { [field]: { $in: value } };
+      default:
+        throw new PhoenixStoreError(
+          `Unsupported operator: ${operator}`,
+          'INVALID_OPERATOR'
+        );
+    }
   }
 
   private buildSort(field?: string, direction: 'asc' | 'desc' = 'asc'): Sort | undefined {

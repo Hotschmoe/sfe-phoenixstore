@@ -8,12 +8,10 @@ export const swaggerPlugin = swagger({
       description: 'MongoDB-based Firestore alternative with familiar syntax and Firebase Storage-like file handling'
     },
     tags: [
-      { name: 'Documents', description: 'Document operations' },
-      { name: 'Queries', description: 'Query operations' },
+      { name: 'Documents', description: 'Document operations (create, read, update, delete)' },
+      { name: 'Queries', description: 'Collection queries with Firestore-like syntax' },
       { name: 'Authentication', description: 'User authentication and management' },
-      { name: 'Email', description: 'Email verification and password reset' },
-      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' },
-      { name: 'WebSocket', description: 'Real-time data synchronization via WebSocket' }
+      { name: 'Storage', description: 'File storage operations (Firebase Storage-like)' }
     ],
     components: {
       schemas: {
@@ -28,21 +26,45 @@ export const swaggerPlugin = swagger({
                 example: 'age:>:21'
               },
               description: 'Array of filter conditions. Each condition follows format: field:operator:value',
-              example: ['age:>:21', 'city:==:London', 'tags:in:[1,2,3]']
+              example: [
+                'age:>:21',
+                'city:==:London',
+                'tags:array-contains:[news]',
+                'category:in:[electronics,books]',
+                'status:!=:deleted',
+                'price:>=:100',
+                'features:array-contains-any:[wifi,bluetooth]'
+              ]
             },
             orderBy: {
-              type: 'string',
-              description: 'Sort field and direction in format field:direction (direction is optional, defaults to asc)',
-              example: 'name:desc'
+              oneOf: [
+                {
+                  type: 'string',
+                  description: 'Sort field and direction in format field:direction (direction is optional, defaults to asc)',
+                  example: 'name:desc'
+                },
+                {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    description: 'Sort field and direction',
+                    example: 'name:desc'
+                  },
+                  description: 'Multiple sort fields in order of priority'
+                }
+              ]
             },
             limit: {
               type: 'number',
-              description: 'Maximum number of results to return',
+              description: 'Maximum number of results to return (1-1000)',
+              minimum: 1,
+              maximum: 1000,
               example: 10
             },
             offset: {
               type: 'number',
               description: 'Number of results to skip (for pagination)',
+              minimum: 0,
               example: 20
             }
           }
@@ -78,19 +100,23 @@ export const swaggerPlugin = swagger({
             },
             in: {
               value: 'in',
-              description: 'Value is in array'
+              description: 'Value is in array',
+              example: 'category:in:[electronics,books]'
             },
             notIn: {
               value: 'not-in',
-              description: 'Value is not in array'
+              description: 'Value is not in array',
+              example: 'status:not-in:[deleted,archived]'
             },
             arrayContains: {
               value: 'array-contains',
-              description: 'Array field contains value'
+              description: 'Array field contains value',
+              example: 'tags:array-contains:[news]'
             },
             arrayContainsAny: {
               value: 'array-contains-any',
-              description: 'Array field contains any of the values'
+              description: 'Array field contains any of the values',
+              example: 'features:array-contains-any:[wifi,bluetooth]'
             }
           }
         },
@@ -269,9 +295,18 @@ export const swaggerPlugin = swagger({
                 id: {
                   type: 'string',
                   description: 'Document ID'
+                },
+                path: {
+                  type: 'string',
+                  description: 'Full document path',
+                  example: 'users/abc123'
+                },
+                data: {
+                  type: 'object',
+                  description: 'Document data',
+                  additionalProperties: true
                 }
-              },
-              additionalProperties: true
+              }
             }
           }
         },
@@ -291,9 +326,13 @@ export const swaggerPlugin = swagger({
                   id: {
                     type: 'string',
                     description: 'Document ID'
+                  },
+                  data: {
+                    type: 'object',
+                    description: 'Document data',
+                    additionalProperties: true
                   }
-                },
-                additionalProperties: true
+                }
               }
             }
           }
@@ -656,93 +695,316 @@ export const swaggerPlugin = swagger({
       }
     ],
     paths: {
-      '/websocket': {
+      '/api/v1/{collection}': {
         get: {
-          tags: ['WebSocket'],
-          summary: 'WebSocket Connection Endpoint',
+          tags: ['Queries'],
+          summary: 'Query documents in a collection',
           description: `
-WebSocket endpoint for real-time data synchronization. Supports:
-- Document watching
-- Collection watching with queries
-- Presence system
-- Authentication
+Query documents in a collection using Firestore-like syntax.
 
-Example usage:
-\`\`\`javascript
-const ws = new WebSocket('ws://your-server/websocket');
+Examples:
+\`\`\`
+# Basic equality
+GET /api/v1/users?where=age:==:21
 
-// Handle connection
-ws.onopen = () => {
-  // Authenticate
-  ws.send(JSON.stringify({
-    type: 'auth',
-    requestId: 'auth-1',
-    token: 'your-jwt-token'
-  }));
-};
+# Multiple conditions
+GET /api/v1/users?where=age:>:21&where=city:==:London
 
-// Handle messages
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  switch (message.type) {
-    case 'connected':
-      // Handle connection
-      break;
-    case 'auth':
-      // Handle auth response
-      break;
-    case 'watch_document':
-      // Handle document updates
-      break;
-    case 'watch_collection':
-      // Handle collection updates
-      break;
-  }
-};
+# Array operations
+GET /api/v1/posts?where=tags:array-contains:[news]
+GET /api/v1/products?where=category:in:[electronics,books]
 
-// Watch a document
-ws.send(JSON.stringify({
-  type: 'watch_document',
-  requestId: 'watch-1',
-  collection: 'users',
-  documentId: 'user123'
-}));
+# Sorting and pagination
+GET /api/v1/users?orderBy=name:asc&limit=10
+GET /api/v1/posts?where=published:==:true&orderBy=date:desc&limit=20&offset=40
 
-// Watch a collection with query
-ws.send(JSON.stringify({
-  type: 'watch_collection',
-  requestId: 'watch-2',
-  collection: 'users',
-  query: {
-    where: [
-      { field: 'age', operator: '>', value: 21 }
-    ],
-    orderBy: [
-      { field: 'name', direction: 'asc' }
-    ]
-  }
-}));
-
-// Update presence
-ws.send(JSON.stringify({
-  type: 'presence',
-  requestId: 'presence-1',
-  action: 'update',
-  status: 'online',
-  metadata: { location: 'home' }
-}));
-
-// Stop watching
-ws.send(JSON.stringify({
-  type: 'unwatch',
-  requestId: 'unwatch-1',
-  subscriptionId: 'subscription-id'
-}));
+# Complex queries
+GET /api/v1/products?where=price:>=:100&where=category:in:[electronics,books]&where=features:array-contains:[wifi]&orderBy=price:desc
 \`\`\`
 `,
+          parameters: [
+            {
+              name: 'collection',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Collection name'
+            },
+            {
+              name: 'where',
+              in: 'query',
+              required: false,
+              schema: {
+                oneOf: [
+                  {
+                    type: 'string'
+                  },
+                  {
+                    type: 'array',
+                    items: {
+                      type: 'string'
+                    }
+                  }
+                ]
+              },
+              description: 'Query conditions in format field:operator:value'
+            },
+            {
+              name: 'orderBy',
+              in: 'query',
+              required: false,
+              schema: {
+                oneOf: [
+                  {
+                    type: 'string'
+                  },
+                  {
+                    type: 'array',
+                    items: {
+                      type: 'string'
+                    }
+                  }
+                ]
+              },
+              description: 'Sort field and direction in format field:direction'
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              required: false,
+              schema: {
+                type: 'number',
+                minimum: 1,
+                maximum: 1000
+              },
+              description: 'Maximum number of results to return'
+            },
+            {
+              name: 'offset',
+              in: 'query',
+              required: false,
+              schema: {
+                type: 'number',
+                minimum: 0
+              },
+              description: 'Number of results to skip'
+            }
+          ],
           responses: {
-            '101': {
-              description: 'WebSocket connection established'
+            '200': {
+              description: 'Query results',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/QueryResponse'
+                  }
+                }
+              }
+            },
+            '400': {
+              description: 'Invalid query parameters',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/Error'
+                  }
+                }
+              }
+            }
+          }
+        },
+        post: {
+          tags: ['Documents'],
+          summary: 'Create a new document',
+          description: 'Create a new document in the specified collection',
+          parameters: [
+            {
+              name: 'collection',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Collection name'
+            }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: true
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Document created successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/DocumentResponse'
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/v1/{collection}/{id}': {
+        get: {
+          tags: ['Documents'],
+          summary: 'Get a document by ID',
+          description: 'Retrieve a document by its ID from the specified collection',
+          parameters: [
+            {
+              name: 'collection',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Collection name'
+            },
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Document ID'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Document retrieved successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/DocumentResponse'
+                  }
+                }
+              }
+            },
+            '404': {
+              description: 'Document not found',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/Error'
+                  }
+                }
+              }
+            }
+          }
+        },
+        put: {
+          tags: ['Documents'],
+          summary: 'Update a document',
+          description: 'Update an existing document in the specified collection',
+          parameters: [
+            {
+              name: 'collection',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Collection name'
+            },
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Document ID'
+            }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: true
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Document updated successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/DocumentResponse'
+                  }
+                }
+              }
+            },
+            '404': {
+              description: 'Document not found',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/Error'
+                  }
+                }
+              }
+            }
+          }
+        },
+        delete: {
+          tags: ['Documents'],
+          summary: 'Delete a document',
+          description: 'Delete a document from the specified collection',
+          parameters: [
+            {
+              name: 'collection',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Collection name'
+            },
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: {
+                type: 'string'
+              },
+              description: 'Document ID'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Document deleted successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/DocumentResponse'
+                  }
+                }
+              }
+            },
+            '404': {
+              description: 'Document not found',
+              content: {
+                'application/json': {
+                  schema: {
+                    $ref: '#/components/schemas/Error'
+                  }
+                }
+              }
             }
           }
         }
