@@ -415,13 +415,13 @@ export class PhoenixApi {
       console.log(`[>] Port: ${port}`);
       console.log('\n[*] Access Points:');
       console.log('-------------------');
-      console.log(`[+] Homepage: http://localhost:${port}`);
-      console.log(`[+] Swagger UI: http://localhost:${port}/swagger`);
-      console.log(`[+] API Base: http://localhost:${port}/api/v1`);
+      console.log(`[+] Homepage: ${config.PHOENIXSTORE_API_URL}:${config.PHOENIXSTORE_PORT}`);
+      console.log(`[+] Swagger UI: ${config.PHOENIXSTORE_API_URL}:${config.PHOENIXSTORE_PORT}/swagger`);
+      console.log(`[+] API Base: ${config.PHOENIXSTORE_API_URL}:${config.PHOENIXSTORE_PORT}/api/v1`);
       console.log(`[+] MongoDB URL: ${config.MONGODB_HOST}:${config.MONGODB_PORT}`);
-      console.log(`[+] Storage URL: ${config.STORAGE_URL}:${config.STORAGE_PORT}`);
+      console.log(`[+] Storage Docker Endpoint: ${config.STORAGE_ENDPOINT}`);
+      console.log(`[+] Storage PublicURL: ${config.STORAGE_URL}:${config.STORAGE_PORT}`);
       console.log(`[+] Storage Console: ${config.STORAGE_URL}:${config.STORAGE_CONSOLE_PORT}`);
-      console.log(`[+] Storage Endpoint: ${config.STORAGE_ENDPOINT}`);
     });
 
     // Start WebSocket server
@@ -435,7 +435,7 @@ export class PhoenixApi {
       this.store.getWebSocketManager().handleConnection(ws);
     });
 
-    console.log(`[+] WebSocket: ws://localhost:${config.WEBSOCKET_PORT}`);
+    console.log(`[+] WebSocket: ws://${config.PHOENIXSTORE_API_URL.replace('http://', '')}:${config.WEBSOCKET_PORT}`);
     console.log('\n[!] Server is ready to accept connections\n');
 
     return this.app;

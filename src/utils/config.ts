@@ -155,7 +155,7 @@ export const config: Config = {
     process.env.MONGODB_PASSWORD || devDefaults.MONGODB_PASSWORD,
     process.env.MONGODB_DATABASE || devDefaults.MONGODB_DATABASE
   ),
-  PHOENIXSTORE_API_URL: process.env.PHOENIXSTORE_API_URL ? `${process.env.PHOENIXSTORE_API_URL}:${process.env.PHOENIXSTORE_PORT}` : devDefaults.PHOENIXSTORE_API_URL,
+  PHOENIXSTORE_API_URL: process.env.PHOENIXSTORE_API_URL || devDefaults.PHOENIXSTORE_API_URL,
   PHOENIXSTORE_PORT: parseInt(process.env.PHOENIXSTORE_PORT || devDefaults.PHOENIXSTORE_PORT, 10),
   // NODE_ENV: process.env.PHOENIXSTORE_ENV || devDefaults.NODE_ENV, // this should be set by Dockerfile
   // WebSocket Configuration
@@ -174,10 +174,11 @@ export const config: Config = {
   STORAGE_ENDPOINT: process.env.STORAGE_ENDPOINT || devDefaults.STORAGE_ENDPOINT,
   STORAGE_PORT: parseInt(process.env.STORAGE_PORT || devDefaults.STORAGE_PORT, 10),
   STORAGE_CONSOLE_PORT: parseInt(process.env.STORAGE_CONSOLE_PORT || devDefaults.STORAGE_CONSOLE_PORT, 10),
-  STORAGE_URL: process.env.STORAGE_URL || devDefaults.STORAGE_URL,
   STORAGE_ACCESS_KEY: process.env.STORAGE_ACCESS_KEY || devDefaults.STORAGE_ACCESS_KEY,
   STORAGE_SECRET_KEY: process.env.STORAGE_SECRET_KEY || devDefaults.STORAGE_SECRET_KEY,
   STORAGE_USE_SSL: process.env.STORAGE_USE_SSL === 'true',
   STORAGE_REGION: process.env.STORAGE_REGION || devDefaults.STORAGE_REGION,
   STORAGE_BUCKET: devDefaults.STORAGE_BUCKET,
+  // Keep URL without port
+  STORAGE_URL: process.env.STORAGE_URL || devDefaults.STORAGE_URL
 };
