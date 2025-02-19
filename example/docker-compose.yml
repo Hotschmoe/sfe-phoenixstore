@@ -13,8 +13,8 @@ services:
 
   phoenixstore:
     build:
-      context: https://github.com/phoenixstore/phoenixstore.git
-      target: ${PHOENIXSTORE_ENV}
+      context: https://github.com/Hotschmoe/sfe-phoenixstore.git
+      target: ${PHOENIXSTORE_ENV:-development}
     ports:
       - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"
       - "${WEBSOCKET_PORT}:${WEBSOCKET_PORT}"
