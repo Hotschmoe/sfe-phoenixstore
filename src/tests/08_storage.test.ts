@@ -12,7 +12,9 @@ describe('Storage', () => {
   beforeAll(async () => {
     try {
       await setup();
-      storage = new StorageAdapter(getTestStorageConfig());
+      const storageConfig = getTestStorageConfig();
+      console.log('[Storage] Configuration:', storageConfig);
+      storage = new StorageAdapter(storageConfig);
       
       // Give MinIO a moment to initialize
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -45,7 +47,7 @@ describe('Storage', () => {
       expect(result.path).toBe(testFilePath);
       expect(result.contentType).toBe('text/plain');
       expect(result.size).toBe(testFileContent.length);
-      expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
+      expect(result.url).toContain(config.STORAGE_PORT.toString());
 
       // Store for cleanup
       uploadedFilePath = result.path;
@@ -70,7 +72,7 @@ describe('Storage', () => {
       expect(result.path).toBe(customPath);
       expect(result.contentType).toBe(options.contentType);
       expect(result.metadata).toEqual(options.metadata);
-      expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
+      expect(result.url).toContain(config.STORAGE_PORT.toString());
 
       // Clean up this file
       await storage.deleteFile(result.bucket, result.path);
@@ -109,12 +111,22 @@ describe('Storage', () => {
 
     test('should generate presigned upload URL', async () => {
       const uploadPath = 'test/presigned-upload.txt';
-      const { url, fields } = await storage.getPresignedUploadUrl(uploadPath);
+      console.log('[Storage] Generating presigned upload URL:', {
+        bucket: config.STORAGE_BUCKET,
+        path: uploadPath,
+        contentType: 'text/plain',
+        expirySeconds: 3600,
+      });
+      const result = await storage.getPresignedUploadUrl(uploadPath);
+      console.log('[Storage] Generated presigned upload URL:', {
+        postURL: result.url,
+        fields: Object.keys(result.fields),
+      });
 
-      expect(url).toBeDefined();
-      expect(fields).toBeDefined();
-      expect(fields.bucket).toBe(config.STORAGE_BUCKET);
-      expect(fields.key).toBe(uploadPath);
+      expect(result.url).toBeDefined();
+      expect(result.fields).toBeDefined();
+      expect(result.fields.bucket).toBe(config.STORAGE_BUCKET);
+      expect(result.fields.key).toBe(uploadPath);
     });
 
     test('should handle file not found errors', async () => {

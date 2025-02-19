@@ -2,20 +2,27 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { PhoenixStore } from "../core/PhoenixStore";
 import { PhoenixApi } from "../api/PhoenixApi";
 import { getTestDbUri, setup, teardown } from "./setup";
+import { config } from "../utils/config";
+import { MongoAdapter } from "../adapters/MongoAdapter";
 
 describe("PhoenixApi", () => {
-  const store = new PhoenixStore(getTestDbUri(), "phoenixstore_test");
+  const adapter = new MongoAdapter(getTestDbUri(), `${config.MONGODB_DATABASE}_test`);
+  const store = new PhoenixStore(adapter);
   const api = new PhoenixApi(store);
+  const collection = `test_collection_${Date.now()}`;
   const TEST_PORT = 4000;
+  const BASE_URL = `http://localhost:${TEST_PORT}`;
 
   beforeAll(async () => {
     await setup();
+    await adapter.connect();
     await store.connect();
     api.start(TEST_PORT);
   });
 
   afterAll(async () => {
     await store.disconnect();
+    await adapter.disconnect();
     await teardown();
   });
 
@@ -27,37 +34,33 @@ describe("PhoenixApi", () => {
     };
 
     test("should create a document", async () => {
-      const response = await fetch(`http://localhost:${TEST_PORT}/api/v1/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(`${BASE_URL}/api/v1/${collection}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(testData)
       });
 
       const result = await response.json();
       expect(response.status).toBe(200);
-      expect(result.status).toBe('success');
+      expect(result.status).toBe("success");
       expect(result.id).toBeDefined();
-      
-      // Store ID for subsequent tests
-      return result.id;
     });
 
     test("should read a document", async () => {
       // First create a document
-      const createResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const createResponse = await fetch(`${BASE_URL}/api/v1/${collection}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(testData)
       });
       const { id } = await createResponse.json();
 
       // Then read it
-      const response = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/${id}`);
+      const response = await fetch(`${BASE_URL}/api/v1/${collection}/${id}`);
       const result = await response.json();
-
       expect(response.status).toBe(200);
-      expect(result.status).toBe('success');
-      expect(result.data).toBeDefined();
+      expect(result.status).toBe("success");
+      expect(result.data.id).toBe(id);
       expect(result.data.name).toBe(testData.name);
       expect(result.data.email).toBe(testData.email);
       expect(result.data.age).toBe(testData.age);
@@ -65,63 +68,84 @@ describe("PhoenixApi", () => {
 
     test("should update a document", async () => {
       // First create a document
-      const createResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const createResponse = await fetch(`${BASE_URL}/api/v1/${collection}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(testData)
       });
       const { id } = await createResponse.json();
 
       // Then update it
-      const updateData = { name: "Updated Name", age: 26 };
-      const updateResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const updateData = { name: "Updated Name" };
+      const response = await fetch(`${BASE_URL}/api/v1/${collection}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updateData)
       });
-      const updateResult = await updateResponse.json();
-      expect(updateResponse.status).toBe(200);
-      expect(updateResult.status).toBe('success');
+
+      const result = await response.json();
+      expect(response.status).toBe(200);
+      expect(result.status).toBe("success");
 
       // Verify the update
-      const getResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/${id}`);
+      const getResponse = await fetch(`${BASE_URL}/api/v1/${collection}/${id}`);
       const getResult = await getResponse.json();
       expect(getResult.data.name).toBe(updateData.name);
-      expect(getResult.data.age).toBe(updateData.age);
-      expect(getResult.data.email).toBe(testData.email); // Should keep original email
+      expect(getResult.data.email).toBe(testData.email); // Original field should remain
+      expect(getResult.data.age).toBe(testData.age); // Original field should remain
     });
 
     test("should delete a document", async () => {
       // First create a document
-      const createResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const createResponse = await fetch(`${BASE_URL}/api/v1/${collection}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(testData)
       });
       const { id } = await createResponse.json();
 
       // Then delete it
-      const deleteResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/${id}`, {
-        method: 'DELETE'
+      const response = await fetch(`${BASE_URL}/api/v1/${collection}/${id}`, {
+        method: "DELETE"
       });
-      const deleteResult = await deleteResponse.json();
-      expect(deleteResponse.status).toBe(200);
-      expect(deleteResult.status).toBe('success');
 
-      // Verify it's gone
-      const getResponse = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/${id}`);
+      const result = await response.json();
+      expect(response.status).toBe(200);
+      expect(result.status).toBe("success");
+
+      // Verify the deletion
+      const getResponse = await fetch(`${BASE_URL}/api/v1/${collection}/${id}`);
       const getResult = await getResponse.json();
-      expect(getResult.status).toBe('error');
-      expect(getResult.code).toBe('DOCUMENT_NOT_FOUND');
+      expect(getResult.status).toBe("error");
+      expect(getResult.code).toBe("DOCUMENT_NOT_FOUND");
     });
 
     test("should handle non-existent documents", async () => {
-      const response = await fetch(`http://localhost:${TEST_PORT}/api/v1/users/nonexistent-id`);
-      const result = await response.json();
+      const nonExistentId = "nonexistent";
       
-      expect(response.status).toBe(200); // We return 200 with error in body
-      expect(result.status).toBe('error');
-      expect(result.code).toBe('DOCUMENT_NOT_FOUND');
+      // Try to read
+      const getResponse = await fetch(`${BASE_URL}/api/v1/${collection}/${nonExistentId}`);
+      const getResult = await getResponse.json();
+      expect(getResult.status).toBe("error");
+      expect(getResult.code).toBe("DOCUMENT_NOT_FOUND");
+
+      // Try to update
+      const updateResponse = await fetch(`${BASE_URL}/api/v1/${collection}/${nonExistentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "New Name" })
+      });
+      const updateResult = await updateResponse.json();
+      expect(updateResult.status).toBe("error");
+      expect(updateResult.code).toBe("DOCUMENT_NOT_FOUND");
+
+      // Try to delete
+      const deleteResponse = await fetch(`${BASE_URL}/api/v1/${collection}/${nonExistentId}`, {
+        method: "DELETE"
+      });
+      const deleteResult = await deleteResponse.json();
+      expect(deleteResult.status).toBe("error");
+      expect(deleteResult.code).toBe("DOCUMENT_NOT_FOUND");
     });
   });
 }); 

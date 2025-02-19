@@ -62,7 +62,16 @@ export const getTestDbUri = () => {
   return `mongodb://${user}:${password}@${host}:${port}/${TEST_DB_NAME}?authSource=admin`;
 };
 
-export const getTestStorageConfig = () => TEST_CONFIG.storage;
+export const getTestStorageConfig = () => ({
+  endPoint: TEST_CONFIG.storage.endPoint,
+  port: TEST_CONFIG.storage.port,
+  useSSL: TEST_CONFIG.storage.useSSL,
+  accessKey: TEST_CONFIG.storage.accessKey,
+  secretKey: TEST_CONFIG.storage.secretKey,
+  region: TEST_CONFIG.storage.region,
+  publicUrl: TEST_CONFIG.storage.publicUrl,
+  bucket: config.STORAGE_BUCKET
+});
 
 export const getTestWebSocketConfig = (): Required<WebSocketManagerConfig> => ({
   heartbeatInterval: TEST_CONFIG.websocket.heartbeatInterval,
