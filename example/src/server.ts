@@ -1,69 +1,45 @@
 import { serve } from 'bun';
-import { join } from 'path';
+import { join, normalize } from 'path';
 
 const port = Number(process.env.PORT) || 80;
-const isDev = process.env.NODE_ENV !== 'production';
+const DIST_DIR = 'dist';
 
-console.log(`Starting server on port ${port} in ${isDev ? 'development' : 'production'} mode...`);
+console.log(`Starting server on port ${port}...`);
 
 serve({
     port,
     async fetch(req) {
         const url = new URL(req.url);
-        let path = url.pathname;
+        // Normalize and sanitize the path
+        const path = normalize(url.pathname).replace(/^(\.\.[\/\\])+/, '');
 
-        // In development, serve from src directory
-        if (isDev) {
-            if (path === '/') {
-                return new Response(Bun.file('index.html'));
-            }
-
-            // Handle TSX/TS files
-            if (path.endsWith('.tsx') || path.endsWith('.ts')) {
-                const filePath = path.slice(1); // Remove leading slash
-                try {
-                    const result = await Bun.build({
-                        entrypoints: [filePath],
-                        target: 'browser',
-                        define: {
-                            'process.env.API_URL': JSON.stringify(process.env.API_URL || 'http://localhost:3000'),
-                            'process.env.WEBSOCKET_URL': JSON.stringify(process.env.WEBSOCKET_URL || 'ws://localhost:3001')
-                        }
-                    });
-                    
-                    if (!result.success) {
-                        console.error('Build failed:', result.logs);
-                        return new Response('Build failed', { status: 500 });
-                    }
-
-                    return new Response(result.outputs[0], {
-                        headers: {
-                            'Content-Type': 'application/javascript',
-                        },
-                    });
-                } catch (error) {
-                    console.error('Build error:', error);
-                    return new Response('Build error', { status: 500 });
-                }
-            }
-
-            // Try to serve static files
-            try {
-                return new Response(Bun.file(path.slice(1)));
-            } catch {
-                return new Response(Bun.file('index.html'));
-            }
-        }
-        
-        // In production, serve from dist directory
-        if (path === '/') {
-            return new Response(Bun.file('dist/index.html'));
+        // Serve index.html for root path
+        if (path === '/' || path === '') {
+            return new Response(Bun.file(join(DIST_DIR, 'index.html')));
         }
 
+        // Try to serve the file from dist
         try {
-            return new Response(Bun.file(join('dist', path)));
-        } catch {
-            return new Response(Bun.file('dist/index.html'));
+            const filePath = join(DIST_DIR, path);
+            const file = Bun.file(filePath);
+
+            // Check if file exists
+            const exists = await file.exists();
+            if (!exists) {
+                // Return index.html for SPA routing
+                return new Response(Bun.file(join(DIST_DIR, 'index.html')));
+            }
+
+            // Set appropriate content type
+            const headers = new Headers();
+            if (path.endsWith('.js')) headers.set('Content-Type', 'application/javascript');
+            else if (path.endsWith('.css')) headers.set('Content-Type', 'text/css');
+            else if (path.endsWith('.html')) headers.set('Content-Type', 'text/html');
+
+            return new Response(file, { headers });
+        } catch (error) {
+            console.error('File serving error:', error);
+            return new Response(Bun.file(join(DIST_DIR, 'index.html')));
         }
     },
 }); 

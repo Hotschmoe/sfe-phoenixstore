@@ -3,9 +3,8 @@
     "module": "src/main.tsx",
     "type": "module",
     "scripts": {
-        "dev": "bun run --watch src/server.ts",
-        "build": "bun build ./src/main.tsx --outdir ./dist --target browser --minify --define 'process.env.API_URL=\"${API_URL}\"' --define 'process.env.WEBSOCKET_URL=\"${WEBSOCKET_URL}\"'",
-        "start": "NODE_ENV=production bun run src/server.ts"
+        "dev": "bun build ./src/main.tsx --outdir ./dist --target browser --watch",
+        "build": "bun build ./src/main.tsx --outdir ./dist --target browser --minify --entry-naming '[name].[ext]' --define 'process.env.PHOENIXSTORE_URL=\"${PHOENIXSTORE_URL}\"' --define 'process.env.PHOENIXSTORE_WEBSOCKET=\"${PHOENIXSTORE_WEBSOCKET}\"'"
     },
     "dependencies": {
         "react": "^18.2.0",

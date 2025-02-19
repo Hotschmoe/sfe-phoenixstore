@@ -9,37 +9,35 @@ COPY package.json tsconfig.json ./
 # Install dependencies
 RUN bun install
 
-# Copy source files
+# Copy source files and static assets
 COPY . .
 
-# Set build-time environment variables with defaults
-# ENV NODE_ENV=development
+# Set build-time environment variables
+ARG PHOENIXSTORE_URL=http://localhost:3000
+ARG PHOENIXSTORE_WEBSOCKET=ws://localhost:3001
+ENV PHOENIXSTORE_URL=${PHOENIXSTORE_URL}
+ENV PHOENIXSTORE_WEBSOCKET=${PHOENIXSTORE_WEBSOCKET}
 
 # Build the application
-RUN bun run build
+RUN mkdir -p dist && \
+    bun run build && \
+    cp index.html dist/
 
 # Serve stage
-FROM oven/bun:1-slim
+FROM nginx:alpine
 
-WORKDIR /app
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Create a non-root user and switch to it
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 bunjs && \
-    chown -R bunjs:nodejs /app
+# Copy built files to nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy built files, server, and package.json
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/server.ts ./src/
-COPY --from=builder /app/package.json .
-
-# Change ownership and switch to non-root user
-RUN chown -R bunjs:nodejs /app
-USER bunjs
+# Verify the content was copied
+RUN ls -la /usr/share/nginx/html && \
+    echo "Content of /usr/share/nginx/html:" && \
+    cat /usr/share/nginx/html/index.html
 
 EXPOSE 80
 
-# Use shell form for better signal handling and logging
-CMD set -x && \
-    echo '[Frontend] Starting server...' && \
-    exec bun start
+# Use default nginx command
+CMD ["nginx", "-g", "daemon off;"]

@@ -10,7 +10,7 @@ export function App() {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${config.API_URL}/health`);
+            const response = await fetch(`${config.PHOENIXSTORE_URL}/health`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

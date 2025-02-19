@@ -5,6 +5,6 @@ const defaults = {
 };
 
 export const config = {
-    API_URL: process.env.API_URL || defaults.API_URL,
-    WEBSOCKET_URL: process.env.WEBSOCKET_URL || defaults.WEBSOCKET_URL
+    PHOENIXSTORE_URL: process.env.PHOENIXSTORE_URL || defaults.API_URL,
+    PHOENIXSTORE_WEBSOCKET: process.env.PHOENIXSTORE_WEBSOCKET || defaults.WEBSOCKET_URL
 }; 
