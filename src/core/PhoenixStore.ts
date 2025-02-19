@@ -1,7 +1,8 @@
 import { MongoAdapter } from '../adapters/MongoAdapter';
 import { DocumentData, QueryOperator, QueryOptions, QueryCondition, PhoenixStoreError } from '../types';
 import { DatabaseAdapter } from '../adapters/DatabaseAdapter';
-import { WebSocketManager } from '../websocket/WebSocketManager';
+import { WebSocketManager } from './WebSocketManager';
+import { config } from '../utils/config';
 
 // Helper classes for collection operations
 export class CollectionQuery<T extends DocumentData> {
@@ -146,7 +147,11 @@ export class PhoenixStore {
 
   constructor(adapter: DatabaseAdapter) {
     this.adapter = adapter;
-    this.webSocketManager = new WebSocketManager(this);
+    this.webSocketManager = new WebSocketManager(adapter as MongoAdapter, {
+      heartbeatInterval: config.WEBSOCKET_HEARTBEAT_INTERVAL,
+      maxClients: config.WEBSOCKET_MAX_CLIENTS,
+      pingTimeout: config.WEBSOCKET_PING_TIMEOUT
+    });
   }
 
   getAdapter(): DatabaseAdapter {

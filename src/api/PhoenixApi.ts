@@ -1,11 +1,13 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
+import { WebSocket as WS, WebSocketServer } from 'ws';
 import { PhoenixStore } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
 import { swaggerPlugin } from './PhoenixSwagger';
 import { AuthManager } from '../core/AuthManager';
 import { MongoAdapter } from '../adapters/MongoAdapter';
+import { config } from '../utils/config';
 
 /**
  * PhoenixApi provides a REST API interface for PhoenixStore
@@ -21,6 +23,7 @@ export class PhoenixApi {
   private app: Elysia;
   private store: PhoenixStore;
   private authManager: AuthManager;
+  private wsServer: WebSocketServer | null = null;
 
   constructor(store: PhoenixStore) {
     this.store = store;
@@ -295,6 +298,7 @@ export class PhoenixApi {
     console.log('[-] PhoenixStore Server');
     console.log('='.repeat(50));
 
+    // Start HTTP server
     this.app.listen({
       port,
       hostname: '0.0.0.0'
@@ -310,7 +314,31 @@ export class PhoenixApi {
       console.log(`[+] Homepage: http://localhost:${port}`);
       console.log(`[+] Swagger UI: http://localhost:${port}/swagger`);
       console.log(`[+] API Base: http://localhost:${port}/api/v1`);
-      console.log('\n[!] Server is ready to accept connections\n');
     });
+
+    // Start WebSocket server
+    this.wsServer = new WebSocketServer({
+      port: config.WEBSOCKET_PORT,
+      clientTracking: true,
+      maxPayload: 50 * 1024 * 1024, // 50MB max payload
+    });
+
+    this.wsServer.on('connection', (ws: WS) => {
+      this.store.getWebSocketManager().handleConnection(ws);
+    });
+
+    console.log(`[+] WebSocket: ws://localhost:${config.WEBSOCKET_PORT}`);
+    console.log('\n[!] Server is ready to accept connections\n');
+
+    return this.app;
+  }
+
+  public async stop() {
+    if (this.wsServer) {
+      await new Promise<void>((resolve) => {
+        this.wsServer?.close(() => resolve());
+      });
+    }
+    await this.app.stop();
   }
 } 
