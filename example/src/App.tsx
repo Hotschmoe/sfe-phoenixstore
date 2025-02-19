@@ -14,9 +14,15 @@ type ResponseData = {
 export function App() {
     const [responses, setResponses] = useState<ResponseData[]>([]);
     const [loading, setLoading] = useState(false);
+    const [currentDocId, setCurrentDocId] = useState<string | null>(null);
 
     const addResponse = (response: ResponseData) => {
         setResponses(prev => [response, ...prev].slice(0, 10));
+        
+        // If this was a successful create operation, store the document ID
+        if (response.status === 'success' && response.data?.id) {
+            setCurrentDocId(response.data.id);
+        }
     };
 
     const testEndpoint = async (operation: string, endpoint: string, method: string, body?: any) => {
@@ -68,21 +74,41 @@ export function App() {
         },
         {
             name: 'Update Document',
-            action: () => testEndpoint(
-                'UPDATE',
-                '/test-collection/latest',
-                'PATCH',
-                { updated: true, timestamp: new Date().toISOString() }
-            ),
+            action: () => {
+                if (!currentDocId) {
+                    addResponse({
+                        status: 'error',
+                        message: 'Please create a document first',
+                        timestamp: new Date().toISOString(),
+                    });
+                    return;
+                }
+                testEndpoint(
+                    'UPDATE',
+                    `/test-collection/${currentDocId}`,
+                    'PUT',
+                    { updated: true, timestamp: new Date().toISOString() }
+                );
+            },
             color: '#FF9800'
         },
         {
             name: 'Delete Document',
-            action: () => testEndpoint(
-                'DELETE',
-                '/test-collection/latest',
-                'DELETE'
-            ),
+            action: () => {
+                if (!currentDocId) {
+                    addResponse({
+                        status: 'error',
+                        message: 'Please create a document first',
+                        timestamp: new Date().toISOString(),
+                    });
+                    return;
+                }
+                testEndpoint(
+                    'DELETE',
+                    `/test-collection/${currentDocId}`,
+                    'DELETE'
+                );
+            },
             color: '#E91E63'
         }
     ];
@@ -106,6 +132,18 @@ export function App() {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
             }}>
                 <h2 style={{ margin: '0 0 20px 0', color: '#333' }}>API Operations</h2>
+                {currentDocId && (
+                    <div style={{
+                        padding: '10px',
+                        marginBottom: '10px',
+                        backgroundColor: '#E3F2FD',
+                        borderRadius: '4px',
+                        fontSize: '14px',
+                        wordBreak: 'break-all'
+                    }}>
+                        Current Document ID: {currentDocId}
+                    </div>
+                )}
                 {testOperations.map((op, index) => (
                     <button
                         key={index}
