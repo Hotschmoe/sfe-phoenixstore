@@ -41,6 +41,24 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
         return parts.join('&');
     };
 
+    const getPrettyQuery = () => {
+        const query: Record<string, any> = {};
+        
+        if (filterConditions.length > 0) {
+            query.filter = filterConditions;
+        }
+        
+        if (orderBy) {
+            query.orderBy = orderBy;
+        }
+        
+        if (limit) {
+            query.limit = parseInt(limit);
+        }
+        
+        return query;
+    };
+
     const addFilterCondition = () => {
         setFilterConditions([...filterConditions, { field: '', operator: '==', value: '' }]);
     };
@@ -379,14 +397,56 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
                     {/* Query Preview */}
                     <div style={{
                         marginBottom: '15px',
-                        padding: '10px',
-                        backgroundColor: '#f5f5f5',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontFamily: 'monospace',
-                        wordBreak: 'break-all'
                     }}>
-                        {buildQueryString()}
+                        <label style={{ 
+                            display: 'block', 
+                            marginBottom: '5px', 
+                            fontSize: '14px', 
+                            fontWeight: 'bold' 
+                        }}>
+                            Query Preview
+                        </label>
+                        
+                        {/* URL Format */}
+                        <div style={{
+                            marginBottom: '10px',
+                            padding: '10px',
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            wordBreak: 'break-all'
+                        }}>
+                            <div style={{ 
+                                color: '#666', 
+                                marginBottom: '5px',
+                                fontSize: '11px',
+                                fontFamily: 'system-ui'
+                            }}>
+                                URL Format:
+                            </div>
+                            {buildQueryString() || '(no query parameters)'}
+                        </div>
+
+                        {/* JSON Format */}
+                        <div style={{
+                            padding: '10px',
+                            backgroundColor: '#f5f5f5',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                            whiteSpace: 'pre-wrap'
+                        }}>
+                            <div style={{ 
+                                color: '#666', 
+                                marginBottom: '5px',
+                                fontSize: '11px',
+                                fontFamily: 'system-ui'
+                            }}>
+                                JSON Format:
+                            </div>
+                            {JSON.stringify(getPrettyQuery(), null, 2) || '(no query parameters)'}
+                        </div>
                     </div>
 
                     <button

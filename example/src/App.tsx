@@ -36,9 +36,17 @@ export function App() {
     const addResponse = (response: ResponseData) => {
         setResponses(prev => [response, ...prev].slice(0, 10));
         
-        // If this was a successful create operation, store the document ID
-        if (response.status === 'success' && response.data?.id) {
-            setCurrentDocId(response.data.id);
+        // Update currentDocId based on response type and content
+        if (response.status === 'success') {
+            // Handle nested data structure
+            const docId = response.data?.id || response.data?.data?.id;
+            if (docId) {
+                // For create operations, set the new document ID
+                setCurrentDocId(docId);
+            } else if (response.operation === 'DELETE' && response.data?.id === currentDocId) {
+                // Clear currentDocId if we just deleted it
+                setCurrentDocId(null);
+            }
         }
     };
 

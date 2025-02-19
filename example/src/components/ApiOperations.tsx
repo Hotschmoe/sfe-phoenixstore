@@ -43,7 +43,14 @@ export function ApiOperations({ loading, currentDocId, responses, onTestEndpoint
                 'CREATE',
                 '/test-collection',
                 'POST',
-                { name: 'Test Document', timestamp: new Date().toISOString() }
+                { 
+                    name: 'Test Document', 
+                    timestamp: new Date().toISOString(),
+                    status: 'active',
+                    type: 'test',
+                    tags: ['test', 'example'],
+                    features: ['example-feature']
+                }
             ),
             color: '#4CAF50'
         },
@@ -58,22 +65,31 @@ export function ApiOperations({ loading, currentDocId, responses, onTestEndpoint
         },
         {
             name: 'Update Document',
-            action: () => onTestEndpoint(
+            action: () => currentDocId ? onTestEndpoint(
                 'UPDATE',
                 `/test-collection/${currentDocId}`,
                 'PUT',
-                { updated: true, timestamp: new Date().toISOString() }
-            ),
-            color: '#FF9800'
+                { 
+                    updated: true, 
+                    timestamp: new Date().toISOString(),
+                    status: 'updated',
+                    type: 'modified',
+                    tags: ['test', 'updated'],
+                    features: ['updated-feature']
+                }
+            ) : null,
+            color: '#FF9800',
+            disabled: !currentDocId
         },
         {
             name: 'Delete Document',
-            action: () => onTestEndpoint(
+            action: () => currentDocId ? onTestEndpoint(
                 'DELETE',
                 `/test-collection/${currentDocId}`,
                 'DELETE'
-            ),
-            color: '#E91E63'
+            ) : null,
+            color: '#E91E63',
+            disabled: !currentDocId
         }
     ];
 
@@ -103,23 +119,25 @@ export function ApiOperations({ loading, currentDocId, responses, onTestEndpoint
                         fontSize: '14px',
                         wordBreak: 'break-all'
                     }}>
-                        Current Document ID: {currentDocId}
+                        <span style={{ fontWeight: 'bold', color: '#1976D2' }}>Current Document ID:</span>
+                        <br />
+                        {currentDocId}
                     </div>
                 )}
                 {testOperations.map((op, index) => (
                     <button
                         key={index}
                         onClick={op.action}
-                        disabled={loading || (op.name.includes('Update') || op.name.includes('Delete')) && !currentDocId}
+                        disabled={loading || op.disabled}
                         style={{
                             padding: '12px 20px',
                             fontSize: '14px',
-                            cursor: loading ? 'not-allowed' : 'pointer',
+                            cursor: (loading || op.disabled) ? 'not-allowed' : 'pointer',
                             backgroundColor: op.color,
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
-                            opacity: loading ? 0.7 : 1,
+                            opacity: (loading || op.disabled) ? 0.7 : 1,
                             transition: 'all 0.2s ease',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}
@@ -159,34 +177,34 @@ export function ApiOperations({ loading, currentDocId, responses, onTestEndpoint
                             return !isStorageMessage;
                         })
                         .map((response, index) => (
-                        <div
-                            key={index}
-                            style={{
-                                padding: '15px',
-                                backgroundColor: response.status === 'success' ? '#E8F5E9' : '#FFEBEE',
-                                borderRadius: '4px',
-                                border: `1px solid ${response.status === 'success' ? '#A5D6A7' : '#FFCDD2'}`,
-                            }}
-                        >
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                marginBottom: '10px',
-                                fontSize: '12px',
-                                color: '#666'
-                            }}>
-                                <span>Status: {response.status.toUpperCase()}</span>
-                                <span>{new Date(response.timestamp).toLocaleString()}</span>
+                            <div
+                                key={index}
+                                style={{
+                                    padding: '15px',
+                                    backgroundColor: response.status === 'success' ? '#E8F5E9' : '#FFEBEE',
+                                    borderRadius: '4px',
+                                    border: `1px solid ${response.status === 'success' ? '#A5D6A7' : '#FFCDD2'}`,
+                                }}
+                            >
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    marginBottom: '10px',
+                                    fontSize: '12px',
+                                    color: '#666'
+                                }}>
+                                    <span>Status: {response.status.toUpperCase()}</span>
+                                    <span>{new Date(response.timestamp).toLocaleString()}</span>
+                                </div>
+                                <pre style={{
+                                    margin: 0,
+                                    whiteSpace: 'pre-wrap',
+                                    fontSize: '14px'
+                                }}>
+                                    {JSON.stringify(response.data || response.message, null, 2)}
+                                </pre>
                             </div>
-                            <pre style={{
-                                margin: 0,
-                                whiteSpace: 'pre-wrap',
-                                fontSize: '14px'
-                            }}>
-                                {JSON.stringify(response.data || response.message, null, 2)}
-                            </pre>
-                        </div>
-                    ))}
+                        ))}
                 </div>
             </div>
         </div>
