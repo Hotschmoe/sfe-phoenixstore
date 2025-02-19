@@ -228,19 +228,19 @@ describe('Storage', () => {
 
     test('should list files with pagination', async () => {
       // First page (2 results)
-      const page1 = await storage.list('', { maxResults: 2 });
+      const page1 = await storage.list('tests/', { maxResults: 2 });
       expect(page1.files.length).toBe(2);
       expect(page1.nextPageToken).toBeDefined();
 
       // Second page
-      const page2 = await storage.list('', { 
+      const page2 = await storage.list('tests/', { 
         maxResults: 2,
         pageToken: page1.nextPageToken
       });
       expect(page2.files.length).toBeGreaterThanOrEqual(1);
       
       // Get all files for comparison
-      const allFiles = await storage.listAll();
+      const allFiles = await storage.listAll('tests/');
       const allPaths = new Set(allFiles.files.map(f => f.path));
       
       // Verify all returned files exist in the complete set

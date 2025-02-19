@@ -271,20 +271,20 @@ describe("PhoenixApi Storage Operations", () => {
 
     test("should list files with pagination", async () => {
       // First page (2 results)
-      const page1Response = await fetch(`${BASE_URL}/api/v1/storage/list?maxResults=2`);
+      const page1Response = await fetch(`${BASE_URL}/api/v1/storage/list/tests?maxResults=2`);
       const page1 = await page1Response.json();
       expect(page1.data.files.length).toBe(2);
       expect(page1.data.nextPageToken).toBeDefined();
 
       // Second page
       const page2Response = await fetch(
-        `${BASE_URL}/api/v1/storage/list?maxResults=2&pageToken=${page1.data.nextPageToken}`
+        `${BASE_URL}/api/v1/storage/list/tests?maxResults=2&pageToken=${page1.data.nextPageToken}`
       );
       const page2 = await page2Response.json();
       expect(page2.data.files.length).toBeGreaterThanOrEqual(1);
 
       // Get all files for comparison
-      const allResponse = await fetch(`${BASE_URL}/api/v1/storage/list`);
+      const allResponse = await fetch(`${BASE_URL}/api/v1/storage/list/tests`);
       const allFiles = await allResponse.json();
       const allPaths = new Set(allFiles.data.files.map((f: any) => f.path));
 
@@ -294,15 +294,22 @@ describe("PhoenixApi Storage Operations", () => {
 
       // Each file from pages should exist in complete set
       for (const path of page1Paths) {
-        expect(allPaths.has(path)).toBe(true);
+        expect(allPaths.has(path as string)).toBe(true);
+        expect((path as string).startsWith('tests/')).toBe(true);
       }
       for (const path of page2Paths) {
-        expect(allPaths.has(path)).toBe(true);
+        expect(allPaths.has(path as string)).toBe(true);
+        expect((path as string).startsWith('tests/')).toBe(true);
       }
 
       // No duplicates between pages
       const intersection = [...page1Paths].filter(x => page2Paths.has(x));
       expect(intersection.length).toBe(0);
+      
+      // Verify all paths are in the tests directory
+      for (const path of allPaths) {
+        expect((path as string).startsWith('tests/')).toBe(true);
+      }
     });
   });
 }); 
