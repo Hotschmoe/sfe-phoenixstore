@@ -14,65 +14,13 @@
   const API_URL = process.env.API_URL;
   const WS_URL = process.env.WEBSOCKET_URL;
 
-  // Authentication
-  async function register() {
-    try {
-      const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        alert('Registration successful! Please login.');
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-    }
-  }
-
-  async function login() {
-    try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        accessToken = data.data.accessToken;
-        isLoggedIn = true;
-        setupWebSocket();
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-    }
-  }
-
-  // File handling
-  async function handleFileUpload() {
-    if (!uploadFile) return;
-
-    const formData = new FormData();
-    formData.append('file', uploadFile);
-
-    try {
-      const response = await fetch(`${API_URL}/storage/upload`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-        body: formData
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
-        alert('File uploaded successfully!');
-      }
-    } catch (error) {
-      console.error('Upload error:', error);
-    }
-  }
-
   // WebSocket setup
   function setupWebSocket() {
+    if (!WS_URL) {
+      console.error('WebSocket URL not configured');
+      return;
+    }
+
     wsConnection = new WebSocket(WS_URL);
     
     wsConnection.onopen = () => {
@@ -95,9 +43,84 @@
     };
   }
 
+  // Authentication
+  async function register() {
+    if (!API_URL) {
+      console.error('API URL not configured');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        alert('Registration successful! Please login.');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+    }
+  }
+
+  async function login() {
+    if (!API_URL) {
+      console.error('API URL not configured');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        accessToken = data.data.accessToken;
+        isLoggedIn = true;
+        setupWebSocket();
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+    }
+  }
+
+  // File handling
+  async function handleFileUpload() {
+    if (!uploadFile || !API_URL) {
+      console.error('No file selected or API URL not configured');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+
+    try {
+      const response = await fetch(`${API_URL}/storage/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        body: formData
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        alert('File uploaded successfully!');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+    }
+  }
+
+  // Cleanup on component unmount
   onMount(() => {
+    console.log('Component mounted');
     return () => {
-      wsConnection?.close();
+      if (wsConnection) {
+        console.log('Cleaning up WebSocket connection');
+        wsConnection.close();
+      }
     };
   });
 </script>

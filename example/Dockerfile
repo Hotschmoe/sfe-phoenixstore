@@ -13,9 +13,11 @@ RUN bun add -d tslib @types/node svelte @rollup/plugin-node-resolve rollup-plugi
 # Copy source files
 COPY . .
 
-# Set build-time environment variables
-ENV API_URL=http://localhost:3000
-ENV WEBSOCKET_URL=ws://localhost:3001
+# Set build-time environment variables with defaults
+ARG API_URL=http://localhost:3000
+ARG WEBSOCKET_URL=ws://localhost:3001
+ENV API_URL=${API_URL}
+ENV WEBSOCKET_URL=${WEBSOCKET_URL}
 
 # Build the application
 RUN bun run build || exit 1
