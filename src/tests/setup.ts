@@ -19,15 +19,6 @@ interface TestConfig {
     pingTimeout: number;
     pollingInterval: number;
   };
-  storage: {
-    endPoint: string;
-    port: number;
-    useSSL: boolean;
-    accessKey: string;
-    secretKey: string;
-    region: string;
-    publicUrl: string;
-  };
 }
 
 // For tests, we always want to use localhost since tests run outside Docker
@@ -44,15 +35,6 @@ export const TEST_CONFIG: TestConfig = {
     maxClients: 100, // Lower limit for tests
     pingTimeout: 5000, // Longer timeout for stability
     pollingInterval: 500 // Faster polling for tests
-  },
-  storage: {
-    endPoint: 'localhost',
-    port: config.STORAGE_PORT,
-    useSSL: false,
-    accessKey: config.STORAGE_ACCESS_KEY,
-    secretKey: config.STORAGE_SECRET_KEY,
-    region: config.STORAGE_REGION,
-    publicUrl: `http://localhost:${config.STORAGE_PORT}`
   }
 };
 
@@ -61,17 +43,6 @@ export const getTestDbUri = () => {
   const { host, port, user, password } = TEST_CONFIG.mongodb;
   return `mongodb://${user}:${password}@${host}:${port}/${TEST_DB_NAME}?authSource=admin`;
 };
-
-export const getTestStorageConfig = () => ({
-  endPoint: TEST_CONFIG.storage.endPoint,
-  port: TEST_CONFIG.storage.port,
-  useSSL: TEST_CONFIG.storage.useSSL,
-  accessKey: TEST_CONFIG.storage.accessKey,
-  secretKey: TEST_CONFIG.storage.secretKey,
-  region: TEST_CONFIG.storage.region,
-  publicUrl: TEST_CONFIG.storage.publicUrl,
-  bucket: config.STORAGE_BUCKET
-});
 
 export const getTestWebSocketConfig = (): Required<WebSocketManagerConfig> => ({
   heartbeatInterval: TEST_CONFIG.websocket.heartbeatInterval,

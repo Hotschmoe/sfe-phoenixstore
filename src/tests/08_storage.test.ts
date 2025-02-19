@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
 import { StorageAdapter } from '../adapters/StorageAdapter';
-import { setup, teardown, getTestStorageConfig } from './setup';
+import { setup, teardown } from './setup';
 import { config } from '../utils/config';
 
 describe('Storage', () => {
@@ -12,9 +12,8 @@ describe('Storage', () => {
   beforeAll(async () => {
     try {
       await setup();
-      const storageConfig = getTestStorageConfig();
-      console.log('[Storage] Configuration:', storageConfig);
-      storage = new StorageAdapter(storageConfig);
+      // Initialize StorageAdapter the same way as PhoenixApi
+      storage = new StorageAdapter();
       
       // Give MinIO a moment to initialize
       await new Promise(resolve => setTimeout(resolve, 1000));
