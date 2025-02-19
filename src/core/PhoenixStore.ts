@@ -119,6 +119,25 @@ class Collection<T extends DocumentData> {
   async query(conditions: QueryCondition[]): Promise<T[]> {
     return await this.adapter.query(this.name, conditions) as T[];
   }
+
+  doc(id: string): DocumentReference<T> {
+    return new DocumentReference<T>(id, this.adapter as MongoAdapter, this.name);
+  }
+
+  where(field: string, operator: QueryOperator, value: any): CollectionQuery<T> {
+    const query = new CollectionQuery<T>(this.name, this.adapter as MongoAdapter, this.name);
+    return query.where(field, operator, value);
+  }
+
+  orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): CollectionQuery<T> {
+    const query = new CollectionQuery<T>(this.name, this.adapter as MongoAdapter, this.name);
+    return query.orderBy(field, direction);
+  }
+
+  limit(limit: number): CollectionQuery<T> {
+    const query = new CollectionQuery<T>(this.name, this.adapter as MongoAdapter, this.name);
+    return query.limit(limit);
+  }
 }
 
 export class PhoenixStore {
