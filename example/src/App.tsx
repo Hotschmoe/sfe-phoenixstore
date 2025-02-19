@@ -23,6 +23,12 @@ type WebSocketMessage = {
     timestamp: string;
 };
 
+type AuthTokens = {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+};
+
 export function App() {
     const [responses, setResponses] = useState<ResponseData[]>([]);
     const [wsMessages, setWsMessages] = useState<WebSocketMessage[]>([]);
@@ -30,6 +36,7 @@ export function App() {
     const [currentDocId, setCurrentDocId] = useState<string | null>(null);
     const [wsConnected, setWsConnected] = useState(false);
     const [ws, setWs] = useState<WebSocket | null>(null);
+    const [authTokens, setAuthTokens] = useState<AuthTokens | null>(null);
 
     // Cleanup WebSocket on unmount
     useEffect(() => {
@@ -53,9 +60,58 @@ export function App() {
         setWsMessages(prev => [message, ...prev].slice(0, 50));
     };
 
-    const connectWebSocket = () => {
+    const signIn = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: 'test@example.com',
+                    password: 'Test123!@#'
+                }),
+            });
+            const json = await response.json();
+            if (json.status === 'success' && json.data) {
+                setAuthTokens(json.data);
+                addResponse({
+                    status: 'success',
+                    data: { message: 'Successfully signed in' },
+                    timestamp: new Date().toISOString(),
+                });
+                return json.data.accessToken;
+            } else {
+                throw new Error(json.message || 'Failed to sign in');
+            }
+        } catch (err) {
+            addResponse({
+                status: 'error',
+                message: err instanceof Error ? err.message : 'Failed to sign in',
+                timestamp: new Date().toISOString(),
+            });
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const connectWebSocket = async () => {
         if (ws) {
             ws.close();
+        }
+
+        // Get auth token
+        const token = authTokens?.accessToken || await signIn();
+        if (!token) {
+            addWsMessage({
+                type: 'error',
+                requestId: generateRequestId(),
+                message: 'Failed to get authentication token',
+                timestamp: new Date().toISOString()
+            });
+            return;
         }
 
         const newWs = new WebSocket(WS_URL);
@@ -69,11 +125,11 @@ export function App() {
                 timestamp: new Date().toISOString()
             });
 
-            // First authenticate
+            // Authenticate with the WebSocket server
             newWs.send(JSON.stringify({
                 type: 'auth',
                 requestId: generateRequestId(),
-                token: 'dummy-token' // Since auth isn't implemented yet
+                token
             }));
         };
 
@@ -103,7 +159,6 @@ export function App() {
                     requestId: generateRequestId(),
                     collection: 'test-collection',
                     query: {
-                        // Optional query parameters
                         orderBy: [
                             { field: 'timestamp', direction: 'desc' }
                         ]
@@ -149,6 +204,12 @@ export function App() {
                 ...(body && { body: JSON.stringify(body) }),
             });
             const json = await response.json();
+            
+            // Handle auth tokens from login response
+            if (endpoint === '/auth/login' && json.status === 'success' && json.data) {
+                setAuthTokens(json.data);
+            }
+            
             addResponse({
                 status: response.ok ? 'success' : 'error',
                 data: json,
@@ -166,6 +227,33 @@ export function App() {
     };
 
     const testOperations = [
+        {
+            name: 'Register User',
+            action: () => testEndpoint(
+                'REGISTER',
+                '/auth/register',
+                'POST',
+                {
+                    email: 'test@example.com',
+                    password: 'Test123!@#',
+                    displayName: 'Test User'
+                }
+            ),
+            color: '#673AB7'
+        },
+        {
+            name: 'Login User',
+            action: () => testEndpoint(
+                'LOGIN',
+                '/auth/login',
+                'POST',
+                {
+                    email: 'test@example.com',
+                    password: 'Test123!@#'
+                }
+            ),
+            color: '#2196F3'
+        },
         {
             name: 'Create Document',
             action: () => testEndpoint(

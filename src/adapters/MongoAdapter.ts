@@ -1,18 +1,17 @@
 import { MongoClient, Collection, Db, ObjectId, Filter, Sort, Document, OptionalUnlessRequiredId, FindOptions, UpdateFilter, DeleteOptions, InsertOneOptions, UpdateOptions, WithId } from 'mongodb';
 import { DocumentData, QueryOperator, QueryOptions, PhoenixStoreError } from '../types';
 import { config } from '../utils/config';
+import { DatabaseAdapter } from './DatabaseAdapter';
 
-export class MongoAdapter {
+export class MongoAdapter implements DatabaseAdapter {
   private client: MongoClient;
   private db: Db | null = null;
+  private readonly uri: string;
+  private readonly dbName: string;
 
-  constructor(private uri: string, private dbName: string) {
-    if (!uri || !dbName) {
-      throw new PhoenixStoreError(
-        'MongoDB URI and database name are required',
-        'MONGODB_CONNECTION_ERROR'
-      );
-    }
+  constructor(uri: string, dbName: string) {
+    this.uri = uri;
+    this.dbName = dbName;
     this.client = new MongoClient(uri);
   }
 
@@ -209,32 +208,22 @@ export class MongoAdapter {
     }
   }
 
-  async update<T extends Document>(
-    collectionName: string,
-    id: string,
-    data: Partial<T>
-  ): Promise<boolean> {
-    const collection = this.getCollection<T>(collectionName);
-    try {
-      const objectId = new ObjectId(id);
-      const result = await collection.updateOne(
-        { _id: objectId } as Filter<T>,
-        { $set: data }
-      );
-      return result.modifiedCount > 0;
-    } catch (error) {
-      return false;
+  async update<T extends Document>(collectionName: string, id: string, data: Partial<T>): Promise<void> {
+    const collection = await this.getCollection(collectionName);
+    const result = await collection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: this.prepareForMongo(data) }
+    );
+    if (!result.acknowledged) {
+        throw new PhoenixStoreError('Failed to update document', 'MONGODB_UPDATE_ERROR');
     }
   }
 
-  async delete(collectionName: string, id: string): Promise<boolean> {
-    const collection = this.getCollection(collectionName);
-    try {
-      const objectId = new ObjectId(id);
-      const result = await collection.deleteOne({ _id: objectId } as Filter<Document>);
-      return result.deletedCount > 0;
-    } catch (error) {
-      return false;
+  async delete(collectionName: string, id: string): Promise<void> {
+    const collection = await this.getCollection(collectionName);
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    if (!result.acknowledged) {
+        throw new PhoenixStoreError('Failed to delete document', 'MONGODB_DELETE_ERROR');
     }
   }
 
@@ -290,5 +279,29 @@ export class MongoAdapter {
   ) {
     const collection = this.getCollection<T>(collectionName);
     return collection.deleteOne(filter, options);
+  }
+
+  private prepareForMongo(data: any): any {
+    if (Array.isArray(data)) {
+        return data.map(item => this.prepareForMongo(item));
+    }
+    
+    if (data && typeof data === 'object') {
+        const result: any = {};
+        for (const [key, value] of Object.entries(data)) {
+            // Skip undefined values
+            if (value === undefined) continue;
+            
+            // Handle nested objects and arrays
+            if (Array.isArray(value) || (value && typeof value === 'object')) {
+                result[key] = this.prepareForMongo(value);
+            } else {
+                result[key] = value;
+            }
+        }
+        return result;
+    }
+    
+    return data;
   }
 }

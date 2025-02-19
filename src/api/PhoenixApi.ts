@@ -4,6 +4,8 @@ import { PhoenixStore } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
 import { swaggerPlugin } from './PhoenixSwagger';
+import { AuthManager } from '../core/AuthManager';
+import { MongoAdapter } from '../adapters/MongoAdapter';
 
 /**
  * PhoenixApi provides a REST API interface for PhoenixStore
@@ -18,12 +20,16 @@ import { swaggerPlugin } from './PhoenixSwagger';
 export class PhoenixApi {
   private app: Elysia;
   private store: PhoenixStore;
+  private authManager: AuthManager;
 
   constructor(store: PhoenixStore) {
     this.store = store;
     this.app = new Elysia()
       .use(cors())
       .use(swaggerPlugin);
+
+    // Initialize AuthManager with the same database adapter
+    this.authManager = new AuthManager(store.getAdapter() as MongoAdapter);
 
     this.setupRoutes();
   }
@@ -112,6 +118,47 @@ export class PhoenixApi {
   }
 
   private setupRoutes() {
+    // Authentication endpoints
+    this.app.post('/api/v1/auth/register', async ({ body }) => {
+      try {
+        const user = await this.authManager.createUser(body as any);
+        return {
+          status: 'success',
+          data: {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName
+          }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.post('/api/v1/auth/login', async ({ body }) => {
+      try {
+        const tokens = await this.authManager.signIn(body as any);
+        return {
+          status: 'success',
+          data: tokens
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.post('/api/v1/auth/refresh', async ({ body }) => {
+      try {
+        const tokens = await this.authManager.refreshToken(body as any);
+        return {
+          status: 'success',
+          data: tokens
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
     // Root endpoint with API information
     this.app.get('/', () => {
       return new Response(homeHtml, {
