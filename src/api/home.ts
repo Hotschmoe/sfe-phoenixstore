@@ -102,7 +102,7 @@ export const homeHtml = `<!DOCTYPE html>
         <p><a href="/swagger">API Documentation (Swagger)</a></p>
         <p><a href="https://github.com/Hotschmoe/sfe-phoenixstore">GitHub Repository</a></p>
         <p><a href="http://${config.MONGODB_HOST}:8081" target="_blank">MongoDB Console (MongoExpress)</a></p>
-        <p><a href="${config.STORAGE_URL}:${config.STORAGE_CONSOLE_PORT}" target="_blank">Storage Console (Minio Console)</a></p>
+        <p><a href="${config.STORAGE_PUBLIC_URL}:${config.STORAGE_CONSOLE_PORT}" target="_blank">Storage Console (Minio Console)</a></p>
       </div>
 
       <div class="version">

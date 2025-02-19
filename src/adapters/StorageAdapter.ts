@@ -21,7 +21,7 @@ export class StorageAdapter {
 
   constructor(customConfig?: Partial<StorageConfig>) {
     // Build storage URL from components
-    this.storageUrl = customConfig?.url || `${config.STORAGE_URL}:${config.STORAGE_PORT}`;
+    this.storageUrl = customConfig?.url || `${config.STORAGE_PUBLIC_URL}:${config.STORAGE_PORT}`;
     
     const finalConfig = {
       endPoint: config.STORAGE_ENDPOINT, // Use the configured endpoint directly

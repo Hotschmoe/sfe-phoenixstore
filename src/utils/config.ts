@@ -32,7 +32,7 @@ interface Config {
   STORAGE_SECRET_KEY: string;
   STORAGE_USE_SSL: boolean;
   STORAGE_REGION: string;
-  STORAGE_URL: string;
+  STORAGE_PUBLIC_URL: string;
   // Default bucket name
   STORAGE_BUCKET: string;
 }
@@ -64,7 +64,7 @@ const devDefaults = {
   STORAGE_ENDPOINT: 'localhost',
   STORAGE_PORT: '9000',
   STORAGE_CONSOLE_PORT: '9001',
-  STORAGE_URL: 'http://localhost',
+  STORAGE_PUBLIC_URL: 'http://localhost',
   STORAGE_ACCESS_KEY: 'minioadmin',
   STORAGE_SECRET_KEY: 'minioadmin',
   STORAGE_USE_SSL: false,
@@ -106,7 +106,7 @@ const validateConfig = () => {
   if (!process.env.STORAGE_CONSOLE_PORT) missingVars.push('STORAGE_CONSOLE_PORT');
   if (!process.env.STORAGE_ACCESS_KEY) missingVars.push('STORAGE_ACCESS_KEY');
   if (!process.env.STORAGE_SECRET_KEY) missingVars.push('STORAGE_SECRET_KEY');
-  if (!process.env.STORAGE_URL) missingVars.push('STORAGE_URL');
+  if (!process.env.STORAGE_PUBLIC_URL) missingVars.push('STORAGE_PUBLIC_URL');
 
   // WebSocket validation
   if (!process.env.WEBSOCKET_PORT) missingVars.push('WEBSOCKET_PORT');
@@ -180,5 +180,5 @@ export const config: Config = {
   STORAGE_REGION: process.env.STORAGE_REGION || devDefaults.STORAGE_REGION,
   STORAGE_BUCKET: devDefaults.STORAGE_BUCKET,
   // Keep URL without port
-  STORAGE_URL: process.env.STORAGE_URL || devDefaults.STORAGE_URL
+  STORAGE_PUBLIC_URL: process.env.STORAGE_PUBLIC_URL || devDefaults.STORAGE_PUBLIC_URL
 };
