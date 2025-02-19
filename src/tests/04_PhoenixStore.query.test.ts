@@ -45,8 +45,7 @@ describe("PhoenixStore Query Operations", () => {
       
       expect(results.length).toBe(2);
       results.forEach(doc => {
-        const data = doc.data();
-        expect(data?.city).toBe("New York");
+        expect(doc.city).toBe("New York");
       });
     });
 
@@ -59,9 +58,8 @@ describe("PhoenixStore Query Operations", () => {
       
       expect(results.length).toBe(2);
       results.forEach(doc => {
-        const data = doc.data();
-        expect(data?.age).toBeGreaterThanOrEqual(25);
-        expect(data?.city).toBe("London");
+        expect(doc.age).toBeGreaterThanOrEqual(25);
+        expect(doc.city).toBe("London");
       });
     });
 
@@ -73,9 +71,7 @@ describe("PhoenixStore Query Operations", () => {
       
       expect(results.length).toBe(5);
       for (let i = 1; i < results.length; i++) {
-        const prevData = results[i-1].data();
-        const currData = results[i].data();
-        expect(prevData?.age).toBeLessThanOrEqual(currData?.age);
+        expect(results[i].age).toBeGreaterThanOrEqual(results[i-1].age);
       }
     });
 
@@ -101,9 +97,7 @@ describe("PhoenixStore Query Operations", () => {
         .get();
       
       expect(offsetResults.length).toBe(3);
-      const firstOffsetData = offsetResults[0].data();
-      const thirdOriginalData = allResults[2].data();
-      expect(firstOffsetData?.name).toBe(thirdOriginalData?.name);
+      expect(offsetResults[0].name).toBe(allResults[2].name);
     });
   });
 
@@ -117,9 +111,8 @@ describe("PhoenixStore Query Operations", () => {
         .get();
       
       expect(results.length).toBe(2);
-      const docs = results.map(doc => doc.data());
-      expect(docs[0]?.age).toBeGreaterThan(docs[1]?.age);
-      docs.forEach(doc => expect(doc?.age).toBeGreaterThanOrEqual(25));
+      expect(results[0].age).toBeGreaterThan(results[1].age);
+      results.forEach(doc => expect(doc.age).toBeGreaterThanOrEqual(25));
     });
 
     test("should handle in operator with multiple values", async () => {
@@ -130,8 +123,7 @@ describe("PhoenixStore Query Operations", () => {
       
       expect(results.length).toBe(3);
       results.forEach(doc => {
-        const data = doc.data();
-        expect(["London", "Paris"]).toContain(data?.city);
+        expect(["London", "Paris"]).toContain(doc.city);
       });
     });
   });
@@ -148,9 +140,8 @@ describe("PhoenixStore Query Operations", () => {
       
       expect(results.length).toBeLessThanOrEqual(2);
       results.forEach(doc => {
-        const data = doc.data();
-        expect(data?.age).toBeGreaterThanOrEqual(25);
-        expect(data?.tags).toContain("developer");
+        expect(doc.age).toBeGreaterThanOrEqual(25);
+        expect(doc.tags).toContain("developer");
       });
     });
 
@@ -165,15 +156,13 @@ describe("PhoenixStore Query Operations", () => {
       const resultsB = await queryB.get();
       
       resultsA.forEach(doc => {
-        const data = doc.data();
-        expect(data?.age).toBeGreaterThanOrEqual(25);
-        expect(data?.city).toBe("London");
+        expect(doc.age).toBeGreaterThanOrEqual(25);
+        expect(doc.city).toBe("London");
       });
       
       resultsB.forEach(doc => {
-        const data = doc.data();
-        expect(data?.age).toBeGreaterThanOrEqual(25);
-        expect(data?.city).toBe("New York");
+        expect(doc.age).toBeGreaterThanOrEqual(25);
+        expect(doc.city).toBe("New York");
       });
     });
   });
@@ -181,12 +170,16 @@ describe("PhoenixStore Query Operations", () => {
   describe("Error Handling", () => {
     test("should handle invalid query combinations", async () => {
       const users = store.collection(collection);
-      await expect(
-        users
+      try {
+        await users
           .orderBy("age", "desc")
           .where("age", ">", 25)
-          .get()
-      ).rejects.toThrow();
+          .get();
+        throw new Error("Should have thrown INVALID_QUERY error");
+      } catch (error: any) {
+        expect(error.message).toBe("where must come before orderBy");
+        expect(error.code).toBe("INVALID_QUERY");
+      }
     });
 
     test("should validate field values", async () => {
@@ -215,13 +208,9 @@ describe("PhoenixStore Query Operations", () => {
         .get();
       
       results.forEach(doc => {
-        const data = doc.data();
-        if (data) {
-          // TypeScript should infer these types correctly
-          expect(typeof data.name).toBe("string");
-          expect(typeof data.age).toBe("number");
-          expect(Array.isArray(data.tags)).toBe(true);
-        }
+        expect(typeof doc.name).toBe("string");
+        expect(typeof doc.age).toBe("number");
+        expect(Array.isArray(doc.tags)).toBe(true);
       });
     });
 
