@@ -20,9 +20,15 @@ export class StorageAdapter {
   private readonly storageUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {
+    // Build storage URL from components
+    this.storageUrl = customConfig?.url || `${config.STORAGE_URL}:${config.STORAGE_PORT}`;
+    
+    // Parse the storage URL to get the host for the MinIO client
+    const url = new URL(this.storageUrl);
+    
     const finalConfig = {
-      endPoint: customConfig?.endPoint || config.STORAGE_ENDPOINT,
-      port: customConfig?.port || config.STORAGE_PORT,
+      endPoint: config.STORAGE_ENDPOINT, // Use the internal endpoint for client operations
+      port: config.STORAGE_PORT,
       useSSL: customConfig?.useSSL ?? config.STORAGE_USE_SSL,
       accessKey: customConfig?.accessKey || config.STORAGE_ACCESS_KEY,
       secretKey: customConfig?.secretKey || config.STORAGE_SECRET_KEY,
@@ -30,8 +36,6 @@ export class StorageAdapter {
     };
 
     this.client = new Client(finalConfig);
-    // Build storage URL from components
-    this.storageUrl = customConfig?.url || `${config.STORAGE_URL}:${config.STORAGE_PORT}`;
     this.defaultBucket = config.STORAGE_BUCKET;
 
     // Ensure bucket exists on initialization
@@ -186,7 +190,19 @@ export class StorageAdapter {
     expires: number = 3600
   ): Promise<string> {
     try {
-      return await this.client.presignedGetObject(bucket, path, expires);
+      // Get the presigned URL from MinIO
+      const minioUrl = await this.client.presignedGetObject(bucket, path, expires);
+      
+      // Replace the internal endpoint with our public URL
+      const url = new URL(minioUrl);
+      const publicUrl = new URL(`${this.storageUrl}/${bucket}/${path}`);
+      
+      // Copy over the query parameters from the presigned URL
+      url.searchParams.forEach((value, key) => {
+        publicUrl.searchParams.append(key, value);
+      });
+      
+      return publicUrl.toString();
     } catch (error: any) {
       throw new PhoenixStoreError('storage/invalid-url', `Failed to generate download URL: ${error.message}`);
     }
