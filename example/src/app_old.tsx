@@ -476,16 +476,7 @@ export function App() {
                         overflowY: 'auto'
                     }}>
                         {responses
-                            .filter(r => {
-                                // Exclude storage-related messages from API section
-                                const isStorageMessage = 
-                                    r.data?.url || 
-                                    r.data?.path || 
-                                    r.message?.includes('file upload') ||
-                                    r.message?.includes('upload failed') ||
-                                    r.message?.toLowerCase().includes('storage');
-                                return !isStorageMessage;
-                            })
+                            .filter(r => !r.data?.url && !r.data?.path && !r.message?.includes('file upload'))
                             .map((response, index) => (
                             <div
                                 key={index}
@@ -720,16 +711,7 @@ export function App() {
                         overflowY: 'auto'
                     }}>
                         {responses
-                            .filter(r => {
-                                // Include all storage-related messages in Storage section
-                                const isStorageMessage = 
-                                    r.data?.url || 
-                                    r.data?.path || 
-                                    r.message?.includes('file upload') ||
-                                    r.message?.includes('upload failed') ||
-                                    r.message?.toLowerCase().includes('storage');
-                                return isStorageMessage;
-                            })
+                            .filter(r => r.data?.url || r.data?.path || r.message?.includes('file upload'))
                             .map((response, index) => (
                             <div
                                 key={index}

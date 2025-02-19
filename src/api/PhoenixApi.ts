@@ -38,6 +38,11 @@ export class PhoenixApi {
     
     // Initialize StorageAdapter
     this.storageAdapter = new StorageAdapter();
+    // this.storageAdapter = new StorageAdapter({
+    //   endPoint: config.STORAGE_ENDPOINT,
+    //   port: config.STORAGE_PORT,
+    //   publicUrl: config.STORAGE_PUBLIC_URL
+    // });
 
     this.setupRoutes();
   }
