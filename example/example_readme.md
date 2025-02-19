@@ -18,6 +18,11 @@ docker compose build
 docker compose up -d
 ```
 
+combined:
+```bash
+docker compose down -v; docker compose build --no-cache; docker compose up -d
+```
+
 The frontend will be available at http://localhost:80 and PhoenixStore API at http://localhost:3000.
 
 To stop the services:

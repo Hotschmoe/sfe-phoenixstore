@@ -11,8 +11,8 @@
   let wsConnection: WebSocket | null = null;
 
   // API URLs from environment
-  const API_URL = import.meta.env.API_URL || 'http://localhost:3000';
-  const WS_URL = import.meta.env.WEBSOCKET_URL || 'ws://localhost:3001';
+  const API_URL = process.env.API_URL;
+  const WS_URL = process.env.WEBSOCKET_URL;
 
   // Authentication
   async function register() {
