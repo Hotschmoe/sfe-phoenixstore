@@ -3,18 +3,14 @@ FROM oven/bun:1 as builder
 
 WORKDIR /app
 
-# Install svelte and other dependencies
 COPY package.json .
-RUN bun init -y && \
-    bun add svelte svelte-preprocess typescript @tsconfig/svelte && \
-    bun add -d @rollup/plugin-typescript rollup-plugin-svelte
+RUN bun install || exit 1
 
 # Copy source files
-COPY src ./src
-COPY tsconfig.json rollup.config.js ./
+COPY . .
 
 # Build the application
-RUN bun run build
+RUN bun run build || exit 1
 
 # Serve stage
 FROM nginx:alpine
