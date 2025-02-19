@@ -315,6 +315,16 @@ export class PhoenixApi {
     this.app.put('/api/v1/:collection/:id', async ({ params, body }) => {
       try {
         const collection = this.store.collection(params.collection);
+        // Check if document exists first
+        const doc = await collection.doc(params.id).get();
+        if (!doc.data()) {
+          return {
+            status: 'error',
+            code: 'DOCUMENT_NOT_FOUND',
+            message: 'Document not found'
+          };
+        }
+        
         await collection.doc(params.id).update(body as DocumentData);
         return { 
           status: 'success',
@@ -332,6 +342,16 @@ export class PhoenixApi {
     this.app.delete('/api/v1/:collection/:id', async ({ params }) => {
       try {
         const collection = this.store.collection(params.collection);
+        // Check if document exists first
+        const doc = await collection.doc(params.id).get();
+        if (!doc.data()) {
+          return {
+            status: 'error',
+            code: 'DOCUMENT_NOT_FOUND',
+            message: 'Document not found'
+          };
+        }
+
         await collection.doc(params.id).delete();
         return { 
           status: 'success',
