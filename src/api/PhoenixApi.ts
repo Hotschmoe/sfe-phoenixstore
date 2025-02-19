@@ -48,73 +48,57 @@ export class PhoenixApi {
   }
 
   private parseQueryParams(query: any) {
+    console.log('Debug - Raw query params:', JSON.stringify(query, null, 2));
     const conditions = [];
     const options: { orderBy?: string; orderDirection?: 'asc' | 'desc'; limit?: number; offset?: number } = {};
 
-    // Parse where conditions (field:operator:value)
-    if (query.where) {
-      const whereConditions = Array.isArray(query.where) ? query.where : [query.where];
-      for (const condition of whereConditions) {
-        const [field, operator, value] = condition.split(':');
-        if (!field || !operator || value === undefined) {
-          throw new PhoenixStoreError(
-            'Invalid where condition format. Expected field:operator:value',
-            'INVALID_QUERY_PARAMS'
-          );
-        }
+    // Parse filter conditions
+    if (query.filter) {
+      try {
+        const filter = JSON.parse(decodeURIComponent(query.filter));
+        console.log('Debug - Parsed filter:', JSON.stringify(filter, null, 2));
         
-        // Validate operator
-        const validOperators = [
-          '==', '!=', '<', '<=', '>', '>=', 
-          'in', 'not-in', 
-          'array-contains', 'array-contains-any'
-        ];
-        
-        if (!validOperators.includes(operator)) {
-          throw new PhoenixStoreError(
-            `Invalid operator: ${operator}. Valid operators are: ${validOperators.join(', ')}`,
-            'INVALID_QUERY_PARAMS'
-          );
-        }
-
-        // Parse value based on type and operator
-        let parsedValue = value;
-        
-        // Handle array operators
-        if (['in', 'not-in', 'array-contains-any'].includes(operator)) {
-          if (!value.startsWith('[') || !value.endsWith(']')) {
-            throw new PhoenixStoreError(
-              `Operator ${operator} requires an array value in format [value1,value2,...]`,
-              'INVALID_QUERY_PARAMS'
-            );
-          }
-          try {
-            parsedValue = JSON.parse(value);
-            if (!Array.isArray(parsedValue)) {
-              throw new Error('Value must be an array');
+        if (Array.isArray(filter)) {
+          for (const condition of filter) {
+            if (!condition.field || !condition.operator || condition.value === undefined) {
+              throw new PhoenixStoreError(
+                'Invalid filter format. Each condition must have field, operator, and value',
+                'INVALID_QUERY_PARAMS'
+              );
             }
-          } catch (error) {
-            throw new PhoenixStoreError(
-              `Invalid array format for operator ${operator}. Expected [value1,value2,...]`,
-              'INVALID_QUERY_PARAMS'
-            );
+            
+            // Validate operator
+            const validOperators = [
+              '==', '!=', '<', '<=', '>', '>=', 
+              'in', 'not-in', 
+              'array-contains', 'array-contains-any'
+            ];
+            
+            if (!validOperators.includes(condition.operator)) {
+              throw new PhoenixStoreError(
+                `Invalid operator: ${condition.operator}. Valid operators are: ${validOperators.join(', ')}`,
+                'INVALID_QUERY_PARAMS'
+              );
+            }
+
+            conditions.push({
+              field: condition.field,
+              operator: condition.operator as QueryOperator,
+              value: condition.value
+            });
           }
         } else {
-          // Parse non-array values
-          if (value === 'true' || value === 'false') {
-            parsedValue = value === 'true';
-          } else if (!isNaN(Number(value)) && value !== '') {
-            parsedValue = Number(value);
-          } else if (value === 'null') {
-            parsedValue = null;
-          }
+          throw new PhoenixStoreError(
+            'Filter must be an array of conditions',
+            'INVALID_QUERY_PARAMS'
+          );
         }
-
-        conditions.push({
-          field,
-          operator: operator as QueryOperator,
-          value: parsedValue
-        });
+      } catch (error) {
+        if (error instanceof PhoenixStoreError) throw error;
+        throw new PhoenixStoreError(
+          'Invalid filter format. Expected JSON array of conditions',
+          'INVALID_QUERY_PARAMS'
+        );
       }
     }
 
@@ -126,7 +110,7 @@ export class PhoenixApi {
       options.orderDirection = (firstOrderBy[1]?.toLowerCase() || 'asc') as 'asc' | 'desc';
     }
 
-    // Parse pagination (startAfter/endBefore for cursor-based pagination)
+    // Parse pagination
     if (query.limit) {
       const limit = parseInt(query.limit);
       if (isNaN(limit) || limit < 1 || limit > 1000) {
@@ -206,6 +190,9 @@ export class PhoenixApi {
     // Query collection
     this.app.get('/api/v1/:collection', async ({ params, query }) => {
       try {
+        console.log('\nDebug - Query endpoint called');
+        console.log('Debug - Collection:', params.collection);
+        
         const collection = this.store.collection<DocumentData>(params.collection);
         const { conditions, options } = this.parseQueryParams(query);
         
@@ -218,6 +205,8 @@ export class PhoenixApi {
           // Build query using Firestore-like chaining
           let queryBuilder: CollectionQuery<DocumentData>;
           
+          console.log('Debug - Building query with conditions:', JSON.stringify(conditions, null, 2));
+          
           // Start with first condition or orderBy
           if (conditions.length > 0) {
             queryBuilder = collection.where(
@@ -225,10 +214,12 @@ export class PhoenixApi {
               conditions[0].operator,
               conditions[0].value
             );
+            console.log('Debug - Initial where condition:', JSON.stringify(conditions[0], null, 2));
             
             // Add remaining conditions
             for (let i = 1; i < conditions.length; i++) {
               const condition = conditions[i];
+              console.log('Debug - Adding where condition:', JSON.stringify(condition, null, 2));
               queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
             }
           } else if (options.orderBy) {
@@ -248,7 +239,9 @@ export class PhoenixApi {
           }
           
           // Execute query
+          console.log('Debug - Executing query...');
           results = await queryBuilder.get();
+          console.log('Debug - Query results count:', results.length);
         }
 
         // Format response to match Firestore structure
@@ -262,6 +255,7 @@ export class PhoenixApi {
           data: formattedResults
         };
       } catch (error) {
+        console.error('Debug - Query error:', error);
         return this.handleError(error);
       }
     });
