@@ -1,12 +1,12 @@
 import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { PhoenixStore } from "../core/PhoenixStore";
 import { PhoenixApi } from "../api/PhoenixApi";
-import { getTestDbUri, setup, teardown } from "./setup";
-import { config } from "../utils/config";
+import { getTestDbUri, setup, teardown, TEST_CONFIG } from "./setup";
 import { MongoAdapter } from "../adapters/MongoAdapter";
+import { StorageAdapter } from "../adapters/StorageAdapter";
 
 describe("PhoenixApi Storage Operations", () => {
-  const adapter = new MongoAdapter(getTestDbUri(), `${config.MONGODB_DATABASE}_test`);
+  const adapter = new MongoAdapter(getTestDbUri(), TEST_CONFIG.mongodb.database);
   const store = new PhoenixStore(adapter);
   const api = new PhoenixApi(store);
   const TEST_PORT = 4000;
@@ -17,6 +17,24 @@ describe("PhoenixApi Storage Operations", () => {
     await setup();
     await adapter.connect();
     await store.connect();
+
+    // Override the storage adapter with test configuration
+    const testConfig = {
+      endPoint: TEST_CONFIG.storage.host, // This should be 'localhost'
+      port: TEST_CONFIG.storage.port,
+      useSSL: TEST_CONFIG.storage.useSSL,
+      accessKey: TEST_CONFIG.storage.accessKey,
+      secretKey: TEST_CONFIG.storage.secretKey,
+      region: TEST_CONFIG.storage.region,
+      url: TEST_CONFIG.storage.publicUrl,
+      defaultBucket: TEST_CONFIG.storage.bucket // Make sure we use the test bucket
+    };
+
+    const testStorage = new StorageAdapter(testConfig);
+    
+    // @ts-ignore - Accessing private property for testing
+    api.storageAdapter = testStorage;
+    
     api.start(TEST_PORT);
   });
 
@@ -27,7 +45,7 @@ describe("PhoenixApi Storage Operations", () => {
           method: "DELETE"
         });
       } catch (error) {
-        console.error('Failed to cleanup test file:', error);
+        console.error('[X] Failed to cleanup test file:', error);
       }
     }
     await store.disconnect();
@@ -38,7 +56,7 @@ describe("PhoenixApi Storage Operations", () => {
   describe("File Upload Operations", () => {
     test("should upload a file with default options", async () => {
       const testContent = "Hello, World!";
-      const testPath = "test/file.txt";
+      const testPath = "tests/file.txt";
       const file = Buffer.from(testContent);
 
       const response = await fetch(`${BASE_URL}/api/v1/storage/upload/${testPath}`, {
@@ -51,11 +69,11 @@ describe("PhoenixApi Storage Operations", () => {
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
       expect(result.data.name).toBe("file.txt");
-      expect(result.data.bucket).toBe(config.STORAGE_BUCKET);
+      expect(result.data.bucket).toBe(TEST_CONFIG.storage.bucket);
       expect(result.data.path).toBe(testPath);
       expect(result.data.contentType).toBe("text/plain");
       expect(result.data.size).toBe(testContent.length);
-      expect(result.data.url).toContain(config.STORAGE_PORT.toString());
+      expect(result.data.url).toContain(TEST_CONFIG.storage.port.toString());
 
       // Store for cleanup
       uploadedFilePath = testPath;
@@ -63,7 +81,7 @@ describe("PhoenixApi Storage Operations", () => {
 
     test("should upload a file with custom options", async () => {
       const testContent = "Custom Content";
-      const customPath = "custom/path/custom-file.txt";
+      const customPath = "tests/custom/path/custom-file.txt";
       const file = Buffer.from(testContent);
 
       const response = await fetch(`${BASE_URL}/api/v1/storage/upload/${customPath}`, {
@@ -87,7 +105,7 @@ describe("PhoenixApi Storage Operations", () => {
 
     test("should handle special characters in path", async () => {
       const testContent = "Special Content";
-      const specialPath = "test/special@#$%/file.txt";
+      const specialPath = "tests/special@#$%/file.txt";
       const file = Buffer.from(testContent);
 
       const response = await fetch(`${BASE_URL}/api/v1/storage/upload/${specialPath}`, {
@@ -127,12 +145,12 @@ describe("PhoenixApi Storage Operations", () => {
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
       expect(result.data.url).toBeDefined();
-      expect(result.data.url).toContain(config.STORAGE_BUCKET);
+      expect(result.data.url).toContain(TEST_CONFIG.storage.bucket);
       expect(result.data.url).toContain(uploadedFilePath);
     });
 
     test("should generate presigned upload URL", async () => {
-      const uploadPath = "test/presigned-upload.txt";
+      const uploadPath = "tests/presigned-upload.txt";
       const response = await fetch(
         `${BASE_URL}/api/v1/storage/upload-url/${uploadPath}?contentType=text/plain`
       );
@@ -142,12 +160,12 @@ describe("PhoenixApi Storage Operations", () => {
       expect(result.status).toBe("success");
       expect(result.data.url).toBeDefined();
       expect(result.data.fields).toBeDefined();
-      expect(result.data.fields.bucket).toBe(config.STORAGE_BUCKET);
+      expect(result.data.fields.bucket).toBe(TEST_CONFIG.storage.bucket);
       expect(result.data.fields.key).toBe(uploadPath);
     });
 
     test("should handle file not found errors", async () => {
-      const nonexistentPath = "nonexistent/file.txt";
+      const nonexistentPath = "tests/nonexistent/file.txt";
       
       const response = await fetch(`${BASE_URL}/api/v1/storage/info/${nonexistentPath}`);
       const result = await response.json();
@@ -160,7 +178,7 @@ describe("PhoenixApi Storage Operations", () => {
     test("should delete file", async () => {
       // Upload a new file for deletion
       const testContent = "Delete me";
-      const deletePath = "test/delete-test.txt";
+      const deletePath = "tests/delete-test.txt";
       const file = Buffer.from(testContent);
 
       await fetch(`${BASE_URL}/api/v1/storage/upload/${deletePath}`, {
@@ -188,10 +206,10 @@ describe("PhoenixApi Storage Operations", () => {
 
   describe("List Operations", () => {
     const testFiles = [
-      "folder1/file1.txt",
-      "folder1/file2.txt",
-      "folder1/subfolder/file3.txt",
-      "folder2/file4.txt"
+      "tests/folder1/file1.txt",
+      "tests/folder1/file2.txt",
+      "tests/folder1/subfolder/file3.txt",
+      "tests/folder2/file4.txt"
     ];
 
     beforeAll(async () => {
@@ -225,9 +243,9 @@ describe("PhoenixApi Storage Operations", () => {
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
       expect(result.data.files.length).toBeGreaterThanOrEqual(4);
-      expect(result.data.prefixes).toContain("folder1/");
-      expect(result.data.prefixes).toContain("folder2/");
-      expect(result.data.prefixes).toContain("folder1/subfolder/");
+      expect(result.data.prefixes).toContain("tests/folder1/");
+      expect(result.data.prefixes).toContain("tests/folder2/");
+      expect(result.data.prefixes).toContain("tests/folder1/subfolder/");
 
       const fileNames = result.data.files.map((f: any) => f.path);
       testFiles.forEach(file => {
@@ -236,19 +254,19 @@ describe("PhoenixApi Storage Operations", () => {
     });
 
     test("should list files in specific folder", async () => {
-      const response = await fetch(`${BASE_URL}/api/v1/storage/list/folder1`);
+      const response = await fetch(`${BASE_URL}/api/v1/storage/list/tests/folder1`);
       const result = await response.json();
 
       expect(response.status).toBe(200);
       expect(result.status).toBe("success");
       expect(result.data.files.length).toBeGreaterThanOrEqual(3);
-      expect(result.data.prefixes).toContain("folder1/subfolder/");
+      expect(result.data.prefixes).toContain("tests/folder1/subfolder/");
 
       const fileNames = result.data.files.map((f: any) => f.path);
-      expect(fileNames).toContain("folder1/file1.txt");
-      expect(fileNames).toContain("folder1/file2.txt");
-      expect(fileNames).toContain("folder1/subfolder/file3.txt");
-      expect(fileNames).not.toContain("folder2/file4.txt");
+      expect(fileNames).toContain("tests/folder1/file1.txt");
+      expect(fileNames).toContain("tests/folder1/file2.txt");
+      expect(fileNames).toContain("tests/folder1/subfolder/file3.txt");
+      expect(fileNames).not.toContain("tests/folder2/file4.txt");
     });
 
     test("should list files with pagination", async () => {

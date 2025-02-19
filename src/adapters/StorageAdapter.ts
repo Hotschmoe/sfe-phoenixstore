@@ -12,6 +12,7 @@ interface StorageConfig {
   secretKey: string;
   region?: string;
   url?: string;
+  bucket?: string;
 }
 
 export class StorageAdapter {
@@ -20,12 +21,12 @@ export class StorageAdapter {
   private readonly storageUrl: string;
 
   constructor(customConfig?: Partial<StorageConfig>) {
-    // Use the public URL from config
-    this.storageUrl = config.STORAGE_PUBLIC_URL;
+    // Use custom config or fall back to default config
+    this.storageUrl = customConfig?.url || config.STORAGE_PUBLIC_URL;
     
     const finalConfig = {
-      endPoint: config.STORAGE_HOST,
-      port: config.STORAGE_PORT,
+      endPoint: customConfig?.endPoint || config.STORAGE_HOST,
+      port: customConfig?.port || config.STORAGE_PORT,
       useSSL: customConfig?.useSSL ?? config.STORAGE_USE_SSL,
       accessKey: customConfig?.accessKey || config.STORAGE_ACCESS_KEY,
       secretKey: customConfig?.secretKey || config.STORAGE_SECRET_KEY,
@@ -33,7 +34,7 @@ export class StorageAdapter {
     };
 
     this.client = new Client(finalConfig);
-    this.defaultBucket = config.STORAGE_BUCKET;
+    this.defaultBucket = customConfig?.bucket || config.STORAGE_BUCKET;
 
     // Log configuration for debugging
     console.log('[Storage] Configuration:', {
