@@ -4,33 +4,42 @@ FROM oven/bun:1 AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json .
-# Install all dependencies including devDependencies
-RUN bun install --frozen-lockfile || exit 1
-# Install necessary build dependencies
-RUN bun add -d tslib @types/node svelte @rollup/plugin-node-resolve rollup-plugin-svelte rollup-plugin-css-only @rollup/plugin-commonjs @rollup/plugin-replace || exit 1
+COPY package.json tsconfig.json ./
+
+# Install dependencies
+RUN bun install
 
 # Copy source files
 COPY . .
 
 # Set build-time environment variables with defaults
-ARG API_URL=http://localhost:3000
-ARG WEBSOCKET_URL=ws://localhost:3001
-ENV API_URL=${API_URL}
-ENV WEBSOCKET_URL=${WEBSOCKET_URL}
+# ENV NODE_ENV=development
 
 # Build the application
-RUN bun run build || exit 1
+RUN bun run build
 
 # Serve stage
-FROM nginx:alpine
+FROM oven/bun:1-slim
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy built files from builder
-COPY --from=builder /app/public /usr/share/nginx/html
+# Create a non-root user and switch to it
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 bunjs && \
+    chown -R bunjs:nodejs /app
+
+# Copy built files, server, and package.json
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src/server.ts ./src/
+COPY --from=builder /app/package.json .
+
+# Change ownership and switch to non-root user
+RUN chown -R bunjs:nodejs /app
+USER bunjs
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Use shell form for better signal handling and logging
+CMD set -x && \
+    echo '[Frontend] Starting server...' && \
+    exec bun start

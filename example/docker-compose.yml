@@ -3,10 +3,14 @@ services:
     build:
       context: .
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT}:80"
     environment:
-      - API_URL=${PHOENIXSTORE_API_URL}:${PHOENIXSTORE_PORT}
-      - WEBSOCKET_URL=ws://${PHOENIXSTORE_API_URL}:${WEBSOCKET_PORT}
+      - PORT=80
+      - NODE_ENV=${PHOENIXSTORE_ENV:-development}
+      - API_URL=${FRONTEND_API_URL:-http://localhost}:${PHOENIXSTORE_PORT:-3000}
+      - WEBSOCKET_URL=ws://${FRONTEND_API_URL:-localhost}:${WEBSOCKET_PORT:-3001}
+    env_file:
+      - .env
     depends_on:
       - phoenixstore
     restart: unless-stopped

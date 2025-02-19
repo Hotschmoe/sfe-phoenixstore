@@ -1,15 +1,17 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "allowJs": true,
-    "checkJs": true,
-    "isolatedModules": true
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules/*", "public/*"]
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "jsx": "react-jsx",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowJs": true,
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noEmit": true,
+        "types": ["bun-types"]
+    },
+    "include": ["src"]
 } 
