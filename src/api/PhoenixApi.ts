@@ -38,11 +38,6 @@ export class PhoenixApi {
     
     // Initialize StorageAdapter
     this.storageAdapter = new StorageAdapter();
-    // this.storageAdapter = new StorageAdapter({
-    //   endPoint: config.STORAGE_ENDPOINT,
-    //   port: config.STORAGE_PORT,
-    //   publicUrl: config.STORAGE_PUBLIC_URL
-    // });
 
     this.setupRoutes();
   }
@@ -377,7 +372,7 @@ export class PhoenixApi {
 
     this.app.get('/api/v1/storage/info/:path', async ({ params }) => {
       try {
-        const result = await this.storageAdapter.getFileInfo(this.storageAdapter.defaultBucket, params.path);
+        const result = await this.storageAdapter.getFileInfo(config.STORAGE_BUCKET, params.path);
         return {
           status: 'success',
           data: result
@@ -389,18 +384,20 @@ export class PhoenixApi {
 
     this.app.delete('/api/v1/storage/:path', async ({ params }) => {
       try {
-        await this.storageAdapter.deleteFile(this.storageAdapter.defaultBucket, params.path);
-        return { status: 'success' };
+        await this.storageAdapter.deleteFile(config.STORAGE_BUCKET, params.path);
+        return {
+          status: 'success',
+          data: { path: params.path }
+        };
       } catch (error) {
         return this.handleError(error);
       }
     });
 
-    // TODO: This is not working as expected, Presigned Download URLs are not working
     this.app.get('/api/v1/storage/download/:path', async ({ params }) => {
       try {
         const url = await this.storageAdapter.getPresignedDownloadUrl(
-          this.storageAdapter.defaultBucket,
+          config.STORAGE_BUCKET,
           params.path,
           3600 // 1 hour expiry
         );
@@ -416,7 +413,7 @@ export class PhoenixApi {
     this.app.get('/api/v1/storage/upload-url/:path', async ({ params, query }) => {
       try {
         const options = {
-          contentType: query.contentType as string,
+          contentType: query.contentType as string || 'application/octet-stream',
           expires: parseInt(query.expires as string) || 3600
         };
 
@@ -494,8 +491,8 @@ export class PhoenixApi {
       console.log(`[+] API Base: ${config.PHOENIXSTORE_API_URL}:${config.PHOENIXSTORE_PORT}/api/v1`);
       console.log(`[+] MongoDB URL: ${config.MONGODB_HOST}:${config.MONGODB_PORT}`);
       console.log(`[+] Storage Docker Endpoint: ${config.STORAGE_ENDPOINT}`);
-      console.log(`[+] Storage PublicURL: ${config.STORAGE_URL}:${config.STORAGE_PORT}`);
-      console.log(`[+] Storage Console: ${config.STORAGE_URL}:${config.STORAGE_CONSOLE_PORT}`);
+      console.log(`[+] Storage PublicURL: ${config.STORAGE_PUBLIC_URL}:${config.STORAGE_PORT}`);
+      console.log(`[+] Storage Console: ${config.STORAGE_PUBLIC_URL}:${config.STORAGE_CONSOLE_PORT}`);
     });
 
     // Start WebSocket server
