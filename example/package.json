@@ -1,0 +1,20 @@
+{
+  "name": "phoenixstore-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w"
+  },
+  "dependencies": {
+    "svelte": "^4.2.12"
+  },
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@tsconfig/svelte": "^5.0.2",
+    "rollup": "^4.12.0",
+    "rollup-plugin-svelte": "^7.1.6",
+    "svelte-preprocess": "^5.1.3",
+    "typescript": "^5.3.3"
+  }
+} 
