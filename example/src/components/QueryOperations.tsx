@@ -9,6 +9,63 @@ interface QueryOperationsProps {
 
 export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOperationsProps) {
     const [customQuery, setCustomQuery] = useState('');
+    const [filterConditions, setFilterConditions] = useState<Array<{
+        field: string;
+        operator: string;
+        value: string | number | string[];
+    }>>([]);
+    const [orderBy, setOrderBy] = useState('');
+    const [limit, setLimit] = useState('');
+
+    const validOperators = [
+        '==', '!=', '<', '<=', '>', '>=',
+        'in', 'not-in',
+        'array-contains', 'array-contains-any'
+    ];
+
+    const buildQueryString = () => {
+        const parts = [];
+        
+        if (filterConditions.length > 0) {
+            parts.push(`filter=${encodeURIComponent(JSON.stringify(filterConditions))}`);
+        }
+        
+        if (orderBy) {
+            parts.push(`orderBy=${orderBy}`);
+        }
+        
+        if (limit) {
+            parts.push(`limit=${limit}`);
+        }
+        
+        return parts.join('&');
+    };
+
+    const addFilterCondition = () => {
+        setFilterConditions([...filterConditions, { field: '', operator: '==', value: '' }]);
+    };
+
+    const updateFilterCondition = (index: number, update: Partial<{
+        field: string;
+        operator: string;
+        value: string | number | string[];
+    }>) => {
+        const newConditions = [...filterConditions];
+        newConditions[index] = { ...newConditions[index], ...update };
+        setFilterConditions(newConditions);
+    };
+
+    const removeFilterCondition = (index: number) => {
+        setFilterConditions(filterConditions.filter((_, i) => i !== index));
+    };
+
+    const handleCustomQuerySubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const queryString = buildQueryString();
+        if (queryString) {
+            onTestEndpoint('QUERY', `/test-collection?${queryString}`, 'GET');
+        }
+    };
 
     const sampleData = [
         {
@@ -96,25 +153,35 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
     const predefinedQueries = [
         {
             name: 'Basic Equality',
-            query: 'where=status:==:active',
+            query: `filter=${encodeURIComponent(JSON.stringify([
+                { field: 'status', operator: '==', value: 'active' }
+            ]))}`,
             description: 'Find all active documents',
             color: '#2196F3'
         },
         {
             name: 'Numeric Comparison',
-            query: 'where=age:>:21&where=age:<:65',
+            query: `filter=${encodeURIComponent(JSON.stringify([
+                { field: 'age', operator: '>', value: 21 },
+                { field: 'age', operator: '<', value: 65 }
+            ]))}`,
             description: 'Find documents with age between 21 and 65',
             color: '#4CAF50'
         },
         {
             name: 'Array Contains',
-            query: 'where=tags:array-contains:[news]',
+            query: `filter=${encodeURIComponent(JSON.stringify([
+                { field: 'tags', operator: 'array-contains', value: 'news' }
+            ]))}`,
             description: 'Find documents with "news" tag',
             color: '#FF9800'
         },
         {
             name: 'Multiple Conditions',
-            query: 'where=status:==:active&where=type:in:[premium,basic]',
+            query: `filter=${encodeURIComponent(JSON.stringify([
+                { field: 'status', operator: '==', value: 'active' },
+                { field: 'type', operator: 'in', value: ['premium', 'basic'] }
+            ]))}`,
             description: 'Find active documents with specific types',
             color: '#9C27B0'
         },
@@ -126,18 +193,15 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
         },
         {
             name: 'Complex Query',
-            query: 'where=price:>=:100&where=category:in:[electronics,books]&where=features:array-contains:[wifi]&orderBy=price:desc',
+            query: `filter=${encodeURIComponent(JSON.stringify([
+                { field: 'price', operator: '>=', value: 100 },
+                { field: 'category', operator: 'in', value: ['electronics', 'books'] },
+                { field: 'features', operator: 'array-contains', value: 'wifi' }
+            ]))}&orderBy=price:desc`,
             description: 'Find expensive items with specific features',
             color: '#E91E63'
         }
     ];
-
-    const handleCustomQuerySubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (customQuery.trim()) {
-            onTestEndpoint('QUERY', `/test-collection?${customQuery}`, 'GET');
-        }
-    };
 
     return (
         <div style={{ 
@@ -146,7 +210,7 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
             gap: '20px',
             marginTop: '20px'
         }}>
-            {/* Left sidebar with query buttons */}
+            {/* Left sidebar with query builder */}
             <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -178,31 +242,156 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
                     {loading ? 'Creating...' : 'Create Data to Query'}
                 </button>
                 
-                {/* Custom Query Form */}
+                {/* Custom Query Builder Form */}
                 <form onSubmit={handleCustomQuerySubmit} style={{
                     marginBottom: '20px',
                     padding: '15px',
                     backgroundColor: '#fff',
                     borderRadius: '4px'
                 }}>
-                    <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>Custom Query</h3>
-                    <input
-                        type="text"
-                        value={customQuery}
-                        onChange={(e) => setCustomQuery(e.target.value)}
-                        placeholder="e.g., where=age:>:21&orderBy=name:asc"
-                        style={{
-                            width: '100%',
-                            padding: '8px',
-                            marginBottom: '10px',
-                            border: '1px solid #ddd',
-                            borderRadius: '4px',
-                            fontSize: '14px'
-                        }}
-                    />
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#333' }}>Custom Query Builder</h3>
+                    
+                    {/* Filter Conditions */}
+                    <div style={{ marginBottom: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <label style={{ fontSize: '14px', fontWeight: 'bold' }}>Filter Conditions</label>
+                            <button
+                                type="button"
+                                onClick={addFilterCondition}
+                                style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: '#2196F3',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                Add Condition
+                            </button>
+                        </div>
+                        
+                        {filterConditions.map((condition, index) => (
+                            <div key={index} style={{
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 1fr 1fr auto',
+                                gap: '8px',
+                                marginBottom: '8px'
+                            }}>
+                                <input
+                                    type="text"
+                                    value={condition.field}
+                                    onChange={(e) => updateFilterCondition(index, { field: e.target.value })}
+                                    placeholder="Field"
+                                    style={{
+                                        padding: '6px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        fontSize: '12px'
+                                    }}
+                                />
+                                <select
+                                    value={condition.operator}
+                                    onChange={(e) => updateFilterCondition(index, { operator: e.target.value })}
+                                    style={{
+                                        padding: '6px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    {validOperators.map(op => (
+                                        <option key={op} value={op}>{op}</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="text"
+                                    value={String(condition.value)}
+                                    onChange={(e) => updateFilterCondition(index, { value: e.target.value })}
+                                    placeholder="Value"
+                                    style={{
+                                        padding: '6px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        fontSize: '12px'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => removeFilterCondition(index)}
+                                    style={{
+                                        padding: '6px',
+                                        backgroundColor: '#f44336',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* OrderBy */}
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 'bold' }}>
+                            Order By
+                        </label>
+                        <input
+                            type="text"
+                            value={orderBy}
+                            onChange={(e) => setOrderBy(e.target.value)}
+                            placeholder="field:asc or field:desc"
+                            style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                fontSize: '14px'
+                            }}
+                        />
+                    </div>
+
+                    {/* Limit */}
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: 'bold' }}>
+                            Limit
+                        </label>
+                        <input
+                            type="number"
+                            value={limit}
+                            onChange={(e) => setLimit(e.target.value)}
+                            placeholder="Maximum results"
+                            style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid #ddd',
+                                borderRadius: '4px',
+                                fontSize: '14px'
+                            }}
+                        />
+                    </div>
+
+                    {/* Query Preview */}
+                    <div style={{
+                        marginBottom: '15px',
+                        padding: '10px',
+                        backgroundColor: '#f5f5f5',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        wordBreak: 'break-all'
+                    }}>
+                        {buildQueryString()}
+                    </div>
+
                     <button
                         type="submit"
-                        disabled={loading || !customQuery.trim()}
+                        disabled={loading}
                         style={{
                             width: '100%',
                             padding: '8px',
@@ -211,7 +400,7 @@ export function QueryOperations({ loading, responses, onTestEndpoint }: QueryOpe
                             border: 'none',
                             borderRadius: '4px',
                             cursor: loading ? 'not-allowed' : 'pointer',
-                            opacity: loading || !customQuery.trim() ? 0.7 : 1
+                            opacity: loading ? 0.7 : 1
                         }}
                     >
                         {loading ? 'Loading...' : 'Execute Query'}

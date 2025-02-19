@@ -5,7 +5,9 @@ import { StorageOperations } from './components/StorageOperations';
 import { QueryOperations } from './components/QueryOperations';
 import { ResponseData, WebSocketMessage, AuthTokens } from './types';
 
-// TODO: Replace hardcoded URLs with environment variables once deployment configuration is fixed
+// Use environment variables for API and WebSocket URLs
+// const API_BASE_URL = `${process.env.PHOENIXSTORE_API_URL || 'http://localhost'}:${process.env.PHOENIXSTORE_PORT || '3000'}/api/v1`;
+// const WS_URL = `ws://${(process.env.PHOENIXSTORE_API_URL || 'http://localhost').replace('http://', '')}:${process.env.WEBSOCKET_PORT || '3001'}`;
 const API_BASE_URL = 'http://localhost:3000/api/v1';
 const WS_URL = 'ws://localhost:3001';
 
