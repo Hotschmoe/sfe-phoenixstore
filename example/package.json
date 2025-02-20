@@ -4,7 +4,7 @@
     "type": "module",
     "scripts": {
       "dev": "bun build ./src/main.tsx --outdir ./dist --target browser --watch",
-      "build": "bun build ./src/main.tsx --outdir ./dist --target browser --minify --entry-naming '[name].[ext]' --define 'process.env.ENVIRONMENT=\"${ENVIRONMENT:-development}\"' --define 'process.env.PHOENIXSTORE_PROTOCOL=\"${PHOENIXSTORE_PROTOCOL:-http}\"' --define 'process.env.PHOENIXSTORE_HOST=\"${PHOENIXSTORE_HOST:-phoenixstore}\"' --define 'process.env.PHOENIXSTORE_PORT=\"${PHOENIXSTORE_PORT:-3000}\"' --define 'process.env.PHOENIXSTORE_PUBLIC_HOST=\"${PHOENIXSTORE_PUBLIC_HOST:-localhost}\"' --define 'process.env.PHOENIXSTORE_PUBLIC_PORT=\"${PHOENIXSTORE_PUBLIC_PORT:-3000}\"' --define 'process.env.WEBSOCKET_PROTOCOL=\"${WEBSOCKET_PROTOCOL:-ws}\"' --define 'process.env.WEBSOCKET_HOST=\"${WEBSOCKET_HOST:-phoenixstore}\"' --define 'process.env.WEBSOCKET_PORT=\"${WEBSOCKET_PORT:-3001}\"' --define 'process.env.WEBSOCKET_PUBLIC_HOST=\"${WEBSOCKET_PUBLIC_HOST:-localhost}\"' --define 'process.env.WEBSOCKET_PUBLIC_PORT=\"${WEBSOCKET_PUBLIC_PORT:-3001}\"' --define 'process.env.STORAGE_PUBLIC_PROTOCOL=\"${STORAGE_PUBLIC_PROTOCOL:-http}\"' --define 'process.env.STORAGE_PUBLIC_HOST=\"${STORAGE_PUBLIC_HOST:-minio}\"' --define 'process.env.STORAGE_PUBLIC_PORT=\"${STORAGE_PUBLIC_PORT:-9000}\"'"
+      "build": "bun build ./src/main.tsx --outdir ./dist --target browser --minify --entry-naming '[name].[ext]'"
     },
     "dependencies": {
       "react": "^18.2.0",
