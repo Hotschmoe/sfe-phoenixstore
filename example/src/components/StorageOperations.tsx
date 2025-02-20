@@ -74,7 +74,7 @@ export function StorageOperations({ loading, currentFile, responses, onUpload, o
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                         }}
                     >
-                        {loading ? 'Downloading...' : 'Download File'}
+                        {loading ? 'Downloading...' : 'Download File (broken: Minio URL mismatch)'}
                     </button>
                 </div>
             </div>
