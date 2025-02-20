@@ -26,11 +26,11 @@ export function App() {
 
   // Debug: Log config at app initialization
   useEffect(() => {
-    console.log('App initialized with config:', {
-      API_BASE_URL,
-      WS_URL,
-      STORAGE_URL,
-    });
+    // console.log('App initialized with config:', {
+    //   API_BASE_URL,
+    //   WS_URL,
+    //   STORAGE_URL,
+    // });
   }, []);
 
   // Cleanup WebSocket on unmount
@@ -291,17 +291,12 @@ export function App() {
 
       if (result.status === 'success' && result.data?.url) {
         const downloadUrl = result.data.url;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = currentFile;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        window.open(downloadUrl, '_blank');
 
         addResponse({
           status: 'success',
           data: {
-            message: 'Download started',
+            message: 'Download URL opened in new tab',
             filename: currentFile,
             url: downloadUrl,
           },

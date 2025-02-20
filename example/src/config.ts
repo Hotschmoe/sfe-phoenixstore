@@ -55,8 +55,8 @@ const config: Config = {
 };
 
 // Debug output (use a non-minified build to see this)
-if (typeof window !== 'undefined') {
-  console.log('Config:', config);
-}
+// if (typeof window !== 'undefined') {
+//   console.log('Config:', config);
+// }
 
 export { config };
