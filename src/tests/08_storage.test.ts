@@ -1,23 +1,35 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
 import { StorageAdapter } from '../adapters/StorageAdapter';
-import { setup, teardown, getTestStorageConfig } from './setup';
-import { config } from '../utils/config';
+import { setup, teardown, TEST_CONFIG } from './setup';
 
 describe('Storage', () => {
   let storage: StorageAdapter;
-  const testFilePath = 'test/file.txt';
+  const testFilePath = 'tests/file.txt';
   const testFileContent = 'Hello, World!';
   let uploadedFilePath: string;
 
   beforeAll(async () => {
     try {
       await setup();
-      storage = new StorageAdapter(getTestStorageConfig());
+      
+      // Initialize StorageAdapter with test configuration
+      const testConfig = {
+        endPoint: TEST_CONFIG.storage.host,
+        port: TEST_CONFIG.storage.port,
+        useSSL: TEST_CONFIG.storage.useSSL,
+        accessKey: TEST_CONFIG.storage.accessKey,
+        secretKey: TEST_CONFIG.storage.secretKey,
+        region: TEST_CONFIG.storage.region,
+        url: TEST_CONFIG.storage.publicUrl,
+        bucket: TEST_CONFIG.storage.bucket  // Changed from defaultBucket to bucket
+      };
+
+      storage = new StorageAdapter(testConfig);
       
       // Give MinIO a moment to initialize
       await new Promise(resolve => setTimeout(resolve, 1000));
     } catch (error) {
-      console.error('Failed to setup storage tests:', error);
+      console.error('[X] Failed to setup storage tests:', error);
       throw error;
     }
   });
@@ -26,11 +38,11 @@ describe('Storage', () => {
     try {
       // Clean up uploaded file if it exists
       if (uploadedFilePath) {
-        await storage.deleteFile(config.STORAGE_BUCKET, uploadedFilePath);
+        await storage.deleteFile(TEST_CONFIG.storage.bucket, uploadedFilePath);
       }
       await teardown();
     } catch (error) {
-      console.error('Failed to cleanup storage tests:', error);
+      console.error('[X] Failed to cleanup storage tests:', error);
     }
   });
 
@@ -41,11 +53,11 @@ describe('Storage', () => {
 
       expect(result).toBeDefined();
       expect(result.name).toBe('file.txt');
-      expect(result.bucket).toBe(config.STORAGE_BUCKET);
+      expect(result.bucket).toBe(TEST_CONFIG.storage.bucket);
       expect(result.path).toBe(testFilePath);
       expect(result.contentType).toBe('text/plain');
       expect(result.size).toBe(testFileContent.length);
-      expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
+      expect(result.url).toContain(TEST_CONFIG.storage.port.toString());
 
       // Store for cleanup
       uploadedFilePath = result.path;
@@ -53,7 +65,7 @@ describe('Storage', () => {
 
     test('should upload a file with custom options', async () => {
       const file = Buffer.from(testFileContent);
-      const customPath = 'custom/path/custom-file.txt';
+      const customPath = 'tests/custom/path/custom-file.txt';
       const options = {
         contentType: 'application/custom',
         metadata: {
@@ -66,11 +78,11 @@ describe('Storage', () => {
 
       expect(result).toBeDefined();
       expect(result.name).toBe('custom-file.txt');
-      expect(result.bucket).toBe(config.STORAGE_BUCKET);
+      expect(result.bucket).toBe(TEST_CONFIG.storage.bucket);
       expect(result.path).toBe(customPath);
       expect(result.contentType).toBe(options.contentType);
       expect(result.metadata).toEqual(options.metadata);
-      expect(result.url).toContain(config.STORAGE_PUBLIC_URL);
+      expect(result.url).toContain(TEST_CONFIG.storage.port.toString());
 
       // Clean up this file
       await storage.deleteFile(result.bucket, result.path);
@@ -78,7 +90,7 @@ describe('Storage', () => {
 
     test('should handle special characters in path', async () => {
       const file = Buffer.from(testFileContent);
-      const pathWithSpecialChars = 'test/special@#$%/file.txt';
+      const pathWithSpecialChars = 'tests/special@#$%/file.txt';
 
       const result = await storage.uploadFile(file, pathWithSpecialChars);
       expect(result.path).toBe(pathWithSpecialChars);
@@ -90,7 +102,7 @@ describe('Storage', () => {
 
   describe('File Operations', () => {
     test('should get file info', async () => {
-      const fileInfo = await storage.getFileInfo(config.STORAGE_BUCKET, uploadedFilePath);
+      const fileInfo = await storage.getFileInfo(TEST_CONFIG.storage.bucket, uploadedFilePath);
 
       expect(fileInfo).toBeDefined();
       expect(fileInfo.name).toBe('file.txt');
@@ -100,30 +112,40 @@ describe('Storage', () => {
     });
 
     test('should generate presigned download URL', async () => {
-      const url = await storage.getPresignedDownloadUrl(config.STORAGE_BUCKET, uploadedFilePath);
+      const url = await storage.getPresignedDownloadUrl(TEST_CONFIG.storage.bucket, uploadedFilePath);
 
       expect(url).toBeDefined();
-      expect(url).toContain(config.STORAGE_BUCKET);
+      expect(url).toContain(TEST_CONFIG.storage.bucket);
       expect(url).toContain(uploadedFilePath);
     });
 
     test('should generate presigned upload URL', async () => {
       const uploadPath = 'test/presigned-upload.txt';
-      const { url, fields } = await storage.getPresignedUploadUrl(uploadPath);
+      console.log('[Storage] Generating presigned upload URL:', {
+        bucket: TEST_CONFIG.storage.bucket,
+        path: uploadPath,
+        contentType: 'text/plain',
+        expirySeconds: 3600,
+      });
+      const result = await storage.getPresignedUploadUrl(uploadPath);
+      console.log('[Storage] Generated presigned upload URL:', {
+        postURL: result.url,
+        fields: Object.keys(result.fields),
+      });
 
-      expect(url).toBeDefined();
-      expect(fields).toBeDefined();
-      expect(fields.bucket).toBe(config.STORAGE_BUCKET);
-      expect(fields.key).toBe(uploadPath);
+      expect(result.url).toBeDefined();
+      expect(result.fields).toBeDefined();
+      expect(result.fields.bucket).toBe(TEST_CONFIG.storage.bucket);
+      expect(result.fields.key).toBe(uploadPath);
     });
 
     test('should handle file not found errors', async () => {
       const nonexistentPath = 'nonexistent/file.txt';
       
-      await expect(storage.getFileInfo(config.STORAGE_BUCKET, nonexistentPath))
+      await expect(storage.getFileInfo(TEST_CONFIG.storage.bucket, nonexistentPath))
         .rejects.toThrow('storage/object-not-found');
         
-      await expect(storage.deleteFile(config.STORAGE_BUCKET, nonexistentPath))
+      await expect(storage.deleteFile(TEST_CONFIG.storage.bucket, nonexistentPath))
         .rejects.toThrow('storage/object-not-found');
     });
 
@@ -146,10 +168,10 @@ describe('Storage', () => {
     beforeAll(async () => {
       // Upload test files in different paths
       const testFiles = [
-        'folder1/file1.txt',
-        'folder1/file2.txt',
-        'folder1/subfolder/file3.txt',
-        'folder2/file4.txt'
+        'tests/folder1/file1.txt',
+        'tests/folder1/file2.txt',
+        'tests/folder1/subfolder/file3.txt',
+        'tests/folder2/file4.txt'
       ];
 
       for (const path of testFiles) {
@@ -160,15 +182,15 @@ describe('Storage', () => {
     afterAll(async () => {
       // Clean up test files
       const testFiles = [
-        'folder1/file1.txt',
-        'folder1/file2.txt',
-        'folder1/subfolder/file3.txt',
-        'folder2/file4.txt'
+        'tests/folder1/file1.txt',
+        'tests/folder1/file2.txt',
+        'tests/folder1/subfolder/file3.txt',
+        'tests/folder2/file4.txt'
       ];
 
       for (const path of testFiles) {
         try {
-          await storage.deleteFile(config.STORAGE_BUCKET, path);
+          await storage.deleteFile(TEST_CONFIG.storage.bucket, path);
         } catch (error) {
           console.warn(`Failed to delete test file ${path}:`, error);
         }
@@ -176,49 +198,49 @@ describe('Storage', () => {
     });
 
     test('should list all files and folders', async () => {
-      const result = await storage.listAll();
+      const result = await storage.listAll('tests/');
       
       expect(result.files.length).toBeGreaterThanOrEqual(4); // Our test files
-      expect(result.prefixes).toContain('folder1/');
-      expect(result.prefixes).toContain('folder2/');
-      expect(result.prefixes).toContain('folder1/subfolder/');
+      expect(result.prefixes).toContain('tests/folder1/');
+      expect(result.prefixes).toContain('tests/folder2/');
+      expect(result.prefixes).toContain('tests/folder1/subfolder/');
       
       // Verify file contents
       const fileNames = result.files.map(f => f.path);
-      expect(fileNames).toContain('folder1/file1.txt');
-      expect(fileNames).toContain('folder1/file2.txt');
-      expect(fileNames).toContain('folder1/subfolder/file3.txt');
-      expect(fileNames).toContain('folder2/file4.txt');
+      expect(fileNames).toContain('tests/folder1/file1.txt');
+      expect(fileNames).toContain('tests/folder1/file2.txt');
+      expect(fileNames).toContain('tests/folder1/subfolder/file3.txt');
+      expect(fileNames).toContain('tests/folder2/file4.txt');
     });
 
     test('should list files in specific folder', async () => {
-      const result = await storage.listAll('folder1/');
+      const result = await storage.listAll('tests/folder1/');
       
       expect(result.files.length).toBeGreaterThanOrEqual(3); // Files in folder1
-      expect(result.prefixes).toContain('folder1/subfolder/');
+      expect(result.prefixes).toContain('tests/folder1/subfolder/');
       
       const fileNames = result.files.map(f => f.path);
-      expect(fileNames).toContain('folder1/file1.txt');
-      expect(fileNames).toContain('folder1/file2.txt');
-      expect(fileNames).toContain('folder1/subfolder/file3.txt');
-      expect(fileNames).not.toContain('folder2/file4.txt');
+      expect(fileNames).toContain('tests/folder1/file1.txt');
+      expect(fileNames).toContain('tests/folder1/file2.txt');
+      expect(fileNames).toContain('tests/folder1/subfolder/file3.txt');
+      expect(fileNames).not.toContain('tests/folder2/file4.txt');
     });
 
     test('should list files with pagination', async () => {
       // First page (2 results)
-      const page1 = await storage.list('', { maxResults: 2 });
+      const page1 = await storage.list('tests/', { maxResults: 2 });
       expect(page1.files.length).toBe(2);
       expect(page1.nextPageToken).toBeDefined();
 
       // Second page
-      const page2 = await storage.list('', { 
+      const page2 = await storage.list('tests/', { 
         maxResults: 2,
         pageToken: page1.nextPageToken
       });
       expect(page2.files.length).toBeGreaterThanOrEqual(1);
       
       // Get all files for comparison
-      const allFiles = await storage.listAll();
+      const allFiles = await storage.listAll('tests/');
       const allPaths = new Set(allFiles.files.map(f => f.path));
       
       // Verify all returned files exist in the complete set

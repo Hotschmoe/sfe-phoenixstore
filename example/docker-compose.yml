@@ -1,8 +1,46 @@
 services:
-  phoenixstore:
+  mock-frontend:
     build:
       context: .
-      target: ${ENVIRONMENT}  # Changed from PHOENIXSTORE_ENV to ENVIRONMENT for consistency
+    ports:
+      - "${FRONTEND_PORT}:80"
+    environment:
+      # Environment
+      - ENVIRONMENT=${ENVIRONMENT}
+      # Frontend Configuration
+      - FRONTEND_PORT=${FRONTEND_PORT}
+      - FRONTEND_HOST=${FRONTEND_HOST}
+      - FRONTEND_PROTOCOL=${FRONTEND_PROTOCOL}
+      # PhoenixStore Server Configuration
+      - PHOENIXSTORE_PROTOCOL=${PHOENIXSTORE_PROTOCOL}
+      - PHOENIXSTORE_HOST=${PHOENIXSTORE_HOST}
+      - PHOENIXSTORE_PORT=${PHOENIXSTORE_PORT}
+      - PHOENIXSTORE_PUBLIC_HOST=${PHOENIXSTORE_PUBLIC_HOST}
+      - PHOENIXSTORE_PUBLIC_PORT=${PHOENIXSTORE_PUBLIC_PORT}
+      # WebSocket Configuration
+      - WEBSOCKET_PROTOCOL=${WEBSOCKET_PROTOCOL}
+      - WEBSOCKET_HOST=${WEBSOCKET_HOST}
+      - WEBSOCKET_PORT=${WEBSOCKET_PORT}
+      - WEBSOCKET_PUBLIC_HOST=${WEBSOCKET_PUBLIC_HOST}
+      - WEBSOCKET_PUBLIC_PORT=${WEBSOCKET_PUBLIC_PORT}
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      # Storage Configuration (MinIO)
+      - STORAGE_PUBLIC_PROTOCOL=${STORAGE_PUBLIC_PROTOCOL}
+      - STORAGE_PUBLIC_HOST=${STORAGE_PUBLIC_HOST}
+      - STORAGE_PUBLIC_PORT=${STORAGE_PUBLIC_PORT}
+
+    env_file:
+      - .env
+    depends_on:
+      - phoenixstore
+    restart: unless-stopped
+
+  phoenixstore:
+    build:
+      context: ..
+      # context: https://github.com/Hotschmoe/sfe-phoenixstore.git
+      target: ${ENVIRONMENT}
     ports:
       - "${PHOENIXSTORE_PORT}:${PHOENIXSTORE_PORT}"
       - "${WEBSOCKET_PORT}:${WEBSOCKET_PORT}"

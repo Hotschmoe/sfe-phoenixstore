@@ -1,0 +1,19 @@
+{
+    "name": "api-tester",
+    "module": "src/main.tsx",
+    "type": "module",
+    "scripts": {
+      "dev": "bun build ./src/main.tsx --outdir ./dist --target browser --watch",
+      "build": "bun build ./src/main.tsx --outdir ./dist --target browser --minify --entry-naming '[name].[ext]'"
+    },
+    "dependencies": {
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0"
+    },
+    "devDependencies": {
+      "@types/react": "^18.2.0",
+      "@types/react-dom": "^18.2.0",
+      "bun-types": "latest",
+      "typescript": "^5.0.0"
+    }
+  }

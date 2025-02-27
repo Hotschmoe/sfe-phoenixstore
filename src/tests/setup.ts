@@ -7,12 +7,17 @@ const TEST_DB_NAME = `${config.MONGODB_DATABASE}_test`;
 
 interface TestConfig {
   mongodb: {
+    protocol: string;
     host: string;
     port: string;
     user: string;
     password: string;
+    database: string;
+    uri: string;
   };
   websocket: {
+    protocol: string;
+    host: string;
     port: number;
     heartbeatInterval: number;
     maxClients: number;
@@ -20,49 +25,61 @@ interface TestConfig {
     pollingInterval: number;
   };
   storage: {
-    endPoint: string;
+    protocol: string;
+    host: string;
     port: number;
-    useSSL: boolean;
+    consolePort: number;
     accessKey: string;
     secretKey: string;
+    useSSL: boolean;
     region: string;
+    bucket: string;
     publicUrl: string;
+    consoleUrl: string;
   };
 }
 
 // For tests, we always want to use localhost since tests run outside Docker
 export const TEST_CONFIG: TestConfig = {
   mongodb: {
-    host: 'localhost',
+    protocol: config.MONGODB_PROTOCOL,
+    host: 'localhost', // Always use localhost for tests
     port: config.MONGODB_PORT,
     user: config.MONGODB_USER,
-    password: config.MONGODB_PASSWORD
+    password: config.MONGODB_PASSWORD,
+    database: TEST_DB_NAME,
+    uri: `${config.MONGODB_PROTOCOL}://${config.MONGODB_USER}:${config.MONGODB_PASSWORD}@localhost:${config.MONGODB_PORT}/${TEST_DB_NAME}?authSource=admin`
   },
   websocket: {
+    protocol: config.WEBSOCKET_PROTOCOL,
+    host: 'localhost', // Always use localhost for tests
     port: 3002, // Use a different port for tests to avoid conflicts
-    heartbeatInterval: 5000, // Longer heartbeat for stability
-    maxClients: 100, // Lower limit for tests
-    pingTimeout: 5000, // Longer timeout for stability
+    heartbeatInterval: config.WEBSOCKET_HEARTBEAT_INTERVAL,
+    maxClients: config.WEBSOCKET_MAX_CLIENTS,
+    pingTimeout: config.WEBSOCKET_PING_TIMEOUT,
     pollingInterval: 500 // Faster polling for tests
   },
   storage: {
-    endPoint: 'localhost',
+    protocol: config.STORAGE_PROTOCOL,
+    host: 'localhost', // Always use localhost for tests
     port: config.STORAGE_PORT,
-    useSSL: false,
+    consolePort: config.STORAGE_CONSOLE_PORT,
     accessKey: config.STORAGE_ACCESS_KEY,
     secretKey: config.STORAGE_SECRET_KEY,
+    useSSL: config.STORAGE_USE_SSL,
     region: config.STORAGE_REGION,
-    publicUrl: `http://localhost:${config.STORAGE_PORT}`
+    // We are only creating one bucket in docker-compose.yml
+    // For testing purposes, we can append _test to item names
+    // or create a test directory in the phoenixstore bucket
+    bucket: config.STORAGE_BUCKET,
+    publicUrl: `${config.STORAGE_PROTOCOL}://localhost:${config.STORAGE_PORT}`,
+    consoleUrl: `${config.STORAGE_PROTOCOL}://localhost:${config.STORAGE_CONSOLE_PORT}`
   }
 };
 
 export const getTestDbUri = () => {
-  // Create test URI with authentication
-  const { host, port, user, password } = TEST_CONFIG.mongodb;
-  return `mongodb://${user}:${password}@${host}:${port}/${TEST_DB_NAME}?authSource=admin`;
+  return TEST_CONFIG.mongodb.uri;
 };
-
-export const getTestStorageConfig = () => TEST_CONFIG.storage;
 
 export const getTestWebSocketConfig = (): Required<WebSocketManagerConfig> => ({
   heartbeatInterval: TEST_CONFIG.websocket.heartbeatInterval,
@@ -72,43 +89,56 @@ export const getTestWebSocketConfig = (): Required<WebSocketManagerConfig> => ({
 });
 
 export const cleanupDatabase = async () => {
-  console.log('Connecting to MongoDB...');
+  console.log('\n[*] Setting up test database...');
   const client = new MongoClient(getTestDbUri());
   
   try {
     await client.connect();
-    console.log('Connected to MongoDB');
+    console.log('[✓] Connected to MongoDB');
     
     const db = client.db(TEST_DB_NAME);
-    console.log('Cleaning up test database...');
+    console.log('[*] Cleaning up test database...');
     
     // Drop all collections
     const collections = await db.listCollections().toArray();
     for (const collection of collections) {
       try {
         await db.collection(collection.name).drop();
-        console.log(`Dropped collection: ${collection.name}`);
+        console.log(`[✓] Dropped collection: ${collection.name}`);
       } catch (error) {
-        console.log(`Error dropping collection ${collection.name}:`, error);
+        console.log(`[!] Error dropping collection ${collection.name}:`, error);
       }
     }
   } catch (error) {
-    console.error('Failed to cleanup test database:', error);
+    console.error('[X] Failed to cleanup test database:', error);
     throw error; // Re-throw to fail the test setup
   } finally {
     await client.close();
-    console.log('Closed MongoDB connection');
+    console.log('[✓] Closed MongoDB connection');
   }
 };
 
 // Run before all tests
 export const setup = async () => {
   try {
-    console.log('Setting up test environment...');
+    console.log('\n[*] Setting up test environment...');
+    console.log('----------------------------------------');
+    console.log(`[>] Environment: ${config.ENVIRONMENT}`);
+    console.log('\n[*] MongoDB Configuration:');
+    console.log(`[>] Test Database: ${TEST_DB_NAME}`);
+    console.log(`[>] MongoDB URI: ${TEST_CONFIG.mongodb.uri}`);
+    console.log('\n[*] WebSocket Configuration:');
+    console.log(`[>] WebSocket Port: ${TEST_CONFIG.websocket.port}`);
+    console.log(`[>] WebSocket URL: ${TEST_CONFIG.websocket.protocol}://${TEST_CONFIG.websocket.host}:${TEST_CONFIG.websocket.port}`);
+    console.log('\n[*] Storage Configuration:');
+    console.log(`[>] Storage Bucket: ${TEST_CONFIG.storage.bucket}`);
+    console.log(`[>] Storage URL: ${TEST_CONFIG.storage.publicUrl}`);
+    console.log(`[>] Console URL: ${TEST_CONFIG.storage.consoleUrl}`);
+    
     await cleanupDatabase();
-    console.log('Test environment setup complete');
+    console.log('[✓] Test environment setup complete\n');
   } catch (error) {
-    console.error('Test setup failed:', error);
+    console.error('\n[X] Test setup failed:', error);
     process.exit(1); // Exit if we can't set up the test environment
   }
 };
@@ -116,10 +146,10 @@ export const setup = async () => {
 // Run after all tests
 export const teardown = async () => {
   try {
-    console.log('Cleaning up test environment...');
+    console.log('\n[*] Cleaning up test environment...');
     await cleanupDatabase();
-    console.log('Test environment cleanup complete');
+    console.log('[✓] Test environment cleanup complete\n');
   } catch (error) {
-    console.error('Test teardown failed:', error);
+    console.error('\n[X] Test teardown failed:', error);
   }
 };

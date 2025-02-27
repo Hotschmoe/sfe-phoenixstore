@@ -1,9 +1,14 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
-import { PhoenixStore } from '../core/PhoenixStore';
+import { WebSocket as WS, WebSocketServer } from 'ws';
+import { PhoenixStore, CollectionQuery } from '../core/PhoenixStore';
 import { DocumentData, PhoenixStoreError, QueryOperator } from '../types';
 import { homeHtml } from './home';
 import { swaggerPlugin } from './PhoenixSwagger';
+import { AuthManager } from '../core/AuthManager';
+import { MongoAdapter } from '../adapters/MongoAdapter';
+import { StorageAdapter } from '../adapters/StorageAdapter';
+import { config } from '../utils/config';
 
 /**
  * PhoenixApi provides a REST API interface for PhoenixStore
@@ -18,12 +23,21 @@ import { swaggerPlugin } from './PhoenixSwagger';
 export class PhoenixApi {
   private app: Elysia;
   private store: PhoenixStore;
+  private authManager: AuthManager;
+  private storageAdapter: StorageAdapter;
+  private wsServer: WebSocketServer | null = null;
 
   constructor(store: PhoenixStore) {
     this.store = store;
     this.app = new Elysia()
       .use(cors())
       .use(swaggerPlugin);
+
+    // Initialize AuthManager with the same database adapter
+    this.authManager = new AuthManager(store.getAdapter() as MongoAdapter);
+    
+    // Initialize StorageAdapter
+    this.storageAdapter = new StorageAdapter();
 
     this.setupRoutes();
   }
@@ -32,65 +46,69 @@ export class PhoenixApi {
     const conditions = [];
     const options: { orderBy?: string; orderDirection?: 'asc' | 'desc'; limit?: number; offset?: number } = {};
 
-    // Parse where conditions (field:operator:value)
-    if (query.where) {
-      const whereConditions = Array.isArray(query.where) ? query.where : [query.where];
-      for (const condition of whereConditions) {
-        const [field, operator, value] = condition.split(':');
-        if (!field || !operator || value === undefined) {
-          throw new PhoenixStoreError(
-            'Invalid where condition format. Expected field:operator:value',
-            'INVALID_QUERY_PARAMS'
-          );
-        }
+    // Parse filter conditions
+    if (query.filter) {
+      try {
+        const filter = JSON.parse(decodeURIComponent(query.filter));
         
-        // Validate operator
-        if (!['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in'].includes(operator)) {
+        if (Array.isArray(filter)) {
+          for (const condition of filter) {
+            if (!condition.field || !condition.operator || condition.value === undefined) {
+              throw new PhoenixStoreError(
+                'Invalid filter format. Each condition must have field, operator, and value',
+                'INVALID_QUERY_PARAMS'
+              );
+            }
+            
+            // Validate operator
+            const validOperators = [
+              '==', '!=', '<', '<=', '>', '>=', 
+              'in', 'not-in', 
+              'array-contains', 'array-contains-any'
+            ];
+            
+            if (!validOperators.includes(condition.operator)) {
+              throw new PhoenixStoreError(
+                `Invalid operator: ${condition.operator}. Valid operators are: ${validOperators.join(', ')}`,
+                'INVALID_QUERY_PARAMS'
+              );
+            }
+
+            conditions.push({
+              field: condition.field,
+              operator: condition.operator as QueryOperator,
+              value: condition.value
+            });
+          }
+        } else {
           throw new PhoenixStoreError(
-            `Invalid operator: ${operator}`,
+            'Filter must be an array of conditions',
             'INVALID_QUERY_PARAMS'
           );
         }
-
-        // Parse value based on type
-        let parsedValue = value;
-        if (value.startsWith('[') && value.endsWith(']')) {
-          // Parse array values for 'in' and 'not-in' operators
-          try {
-            parsedValue = JSON.parse(value);
-          } catch {
-            throw new PhoenixStoreError(
-              'Invalid array format in where condition',
-              'INVALID_QUERY_PARAMS'
-            );
-          }
-        } else if (value === 'true' || value === 'false') {
-          parsedValue = value === 'true';
-        } else if (!isNaN(Number(value))) {
-          parsedValue = Number(value);
-        }
-
-        conditions.push({
-          field,
-          operator: operator as QueryOperator,
-          value: parsedValue
-        });
+      } catch (error) {
+        if (error instanceof PhoenixStoreError) throw error;
+        throw new PhoenixStoreError(
+          'Invalid filter format. Expected JSON array of conditions',
+          'INVALID_QUERY_PARAMS'
+        );
       }
     }
 
-    // Parse orderBy
+    // Parse orderBy (support multiple orderBy fields)
     if (query.orderBy) {
-      const [field, direction] = query.orderBy.split(':');
-      options.orderBy = field;
-      options.orderDirection = (direction?.toLowerCase() || 'asc') as 'asc' | 'desc';
+      const orderByFields = Array.isArray(query.orderBy) ? query.orderBy : [query.orderBy];
+      const firstOrderBy = orderByFields[0].split(':');
+      options.orderBy = firstOrderBy[0];
+      options.orderDirection = (firstOrderBy[1]?.toLowerCase() || 'asc') as 'asc' | 'desc';
     }
 
     // Parse pagination
     if (query.limit) {
       const limit = parseInt(query.limit);
-      if (isNaN(limit) || limit < 1) {
+      if (isNaN(limit) || limit < 1 || limit > 1000) {
         throw new PhoenixStoreError(
-          'Invalid limit parameter',
+          'Invalid limit parameter. Must be between 1 and 1000',
           'INVALID_QUERY_PARAMS'
         );
       }
@@ -101,7 +119,7 @@ export class PhoenixApi {
       const offset = parseInt(query.offset);
       if (isNaN(offset) || offset < 0) {
         throw new PhoenixStoreError(
-          'Invalid offset parameter',
+          'Invalid offset parameter. Must be non-negative',
           'INVALID_QUERY_PARAMS'
         );
       }
@@ -112,6 +130,47 @@ export class PhoenixApi {
   }
 
   private setupRoutes() {
+    // Authentication endpoints
+    this.app.post('/api/v1/auth/register', async ({ body }) => {
+      try {
+        const user = await this.authManager.createUser(body as any);
+        return {
+          status: 'success',
+          data: {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName
+          }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.post('/api/v1/auth/login', async ({ body }) => {
+      try {
+        const tokens = await this.authManager.signIn(body as any);
+        return {
+          status: 'success',
+          data: tokens
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.post('/api/v1/auth/refresh', async ({ body }) => {
+      try {
+        const tokens = await this.authManager.refreshToken(body as any);
+        return {
+          status: 'success',
+          data: tokens
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
     // Root endpoint with API information
     this.app.get('/', () => {
       return new Response(homeHtml, {
@@ -124,35 +183,65 @@ export class PhoenixApi {
     // Query collection
     this.app.get('/api/v1/:collection', async ({ params, query }) => {
       try {
-        const collection = this.store.collection(params.collection);
+        const collection = this.store.collection<DocumentData>(params.collection);
         const { conditions, options } = this.parseQueryParams(query);
         
-        // Start with first condition or orderBy to get Query object
-        let queryBuilder = conditions.length > 0
-          ? collection.where(conditions[0].field, conditions[0].operator, conditions[0].value)
-          : collection.orderBy(options.orderBy || 'id', options.orderDirection);
+        let results: DocumentData[];
+        
+        // If no conditions or options, do a simple collection query
+        if (conditions.length === 0 && !options.orderBy && !options.limit) {
+          results = await collection.query([]);
+        } else {
+          // Build query using Firestore-like chaining
+          let queryBuilder: CollectionQuery<DocumentData>;
+          
+          // Start with first condition or orderBy
+          if (conditions.length > 0) {
+            queryBuilder = collection.where(
+              conditions[0].field,
+              conditions[0].operator,
+              conditions[0].value
+            );
+            
+            // Add remaining conditions
+            for (let i = 1; i < conditions.length; i++) {
+              const condition = conditions[i];
+              queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
+            }
+          } else if (options.orderBy) {
+            queryBuilder = collection.orderBy(options.orderBy, options.orderDirection || 'asc');
+          } else {
+            queryBuilder = collection.orderBy('id', 'asc');
+          }
+          
+          // Apply orderBy if specified and not already applied
+          if (options.orderBy && conditions.length > 0) {
+            queryBuilder = queryBuilder.orderBy(options.orderBy, options.orderDirection || 'asc');
+          }
+          
+          // Apply limit if specified
+          if (options.limit) {
+            queryBuilder = queryBuilder.limit(options.limit);
+          }
 
-        // Add remaining conditions
-        for (let i = 1; i < conditions.length; i++) {
-          const condition = conditions[i];
-          queryBuilder = queryBuilder.where(condition.field, condition.operator, condition.value);
+          // Apply offset if specified
+          if (options.offset) {
+            queryBuilder = queryBuilder.offset(options.offset);
+          }
+          
+          // Execute query
+          results = await queryBuilder.get();
         }
-        
-        // Add remaining options
-        if (options.orderBy && conditions.length > 0) {
-          queryBuilder = queryBuilder.orderBy(options.orderBy, options.orderDirection);
-        }
-        if (options.limit) {
-          queryBuilder = queryBuilder.limit(options.limit);
-        }
-        if (options.offset) {
-          queryBuilder = queryBuilder.offset(options.offset);
-        }
-        
-        const results = await queryBuilder.get();
+
+        // Format response to match Firestore structure
+        const formattedResults = results.map((doc: DocumentData & { id?: string }) => ({
+          id: doc.id || null,
+          data: doc
+        }));
+
         return {
           status: 'success',
-          data: results
+          data: formattedResults
         };
       } catch (error) {
         return this.handleError(error);
@@ -164,7 +253,13 @@ export class PhoenixApi {
       try {
         const collection = this.store.collection(params.collection);
         const id = await collection.add(body as DocumentData);
-        return { id, status: 'success' };
+        return { 
+          status: 'success',
+          data: { 
+            id,
+            path: `${params.collection}/${id}`
+          }
+        };
       } catch (error) {
         return this.handleError(error);
       }
@@ -189,7 +284,8 @@ export class PhoenixApi {
           status: 'success',
           data: {
             id: params.id,
-            ...data
+            path: `${params.collection}/${params.id}`,
+            data
           }
         };
       } catch (error) {
@@ -201,8 +297,24 @@ export class PhoenixApi {
     this.app.put('/api/v1/:collection/:id', async ({ params, body }) => {
       try {
         const collection = this.store.collection(params.collection);
+        // Check if document exists first
+        const doc = await collection.doc(params.id).get();
+        if (!doc.data()) {
+          return {
+            status: 'error',
+            code: 'DOCUMENT_NOT_FOUND',
+            message: 'Document not found'
+          };
+        }
+        
         await collection.doc(params.id).update(body as DocumentData);
-        return { status: 'success' };
+        return { 
+          status: 'success',
+          data: {
+            id: params.id,
+            path: `${params.collection}/${params.id}`
+          }
+        };
       } catch (error) {
         return this.handleError(error);
       }
@@ -212,8 +324,121 @@ export class PhoenixApi {
     this.app.delete('/api/v1/:collection/:id', async ({ params }) => {
       try {
         const collection = this.store.collection(params.collection);
+        // Check if document exists first
+        const doc = await collection.doc(params.id).get();
+        if (!doc.data()) {
+          return {
+            status: 'error',
+            code: 'DOCUMENT_NOT_FOUND',
+            message: 'Document not found'
+          };
+        }
+
         await collection.doc(params.id).delete();
-        return { status: 'success' };
+        return { 
+          status: 'success',
+          data: {
+            id: params.id,
+            path: `${params.collection}/${params.id}`
+          }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    // Storage endpoints
+    this.app.post('/api/v1/storage/upload/:path', async ({ params, body, headers }) => {
+      try {
+        const contentType = headers['content-type'] || 'application/octet-stream';
+        const file = body as Buffer;
+        const options = {
+          contentType,
+          metadata: {
+            uploadedBy: 'api',
+            timestamp: new Date().toISOString()
+          }
+        };
+
+        const result = await this.storageAdapter.uploadFile(file, params.path, options);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/info/:path', async ({ params }) => {
+      try {
+        const result = await this.storageAdapter.getFileInfo(config.STORAGE_BUCKET, params.path);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.delete('/api/v1/storage/:path', async ({ params }) => {
+      try {
+        await this.storageAdapter.deleteFile(config.STORAGE_BUCKET, params.path);
+        return {
+          status: 'success',
+          data: { path: params.path }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/download/:path', async ({ params }) => {
+      try {
+        const url = await this.storageAdapter.getPresignedDownloadUrl(
+          config.STORAGE_BUCKET,
+          params.path,
+          3600 // 1 hour expiry
+        );
+        return {
+          status: 'success',
+          data: { url }
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/upload-url/:path', async ({ params, query }) => {
+      try {
+        const options = {
+          contentType: query.contentType as string || 'application/octet-stream',
+          expires: parseInt(query.expires as string) || 3600
+        };
+
+        const result = await this.storageAdapter.getPresignedUploadUrl(params.path, options);
+        return {
+          status: 'success',
+          data: result
+        };
+      } catch (error) {
+        return this.handleError(error);
+      }
+    });
+
+    this.app.get('/api/v1/storage/list/:prefix?', async ({ params, query }) => {
+      try {
+        const options = {
+          maxResults: parseInt(query.maxResults as string) || 1000,
+          pageToken: query.pageToken as string
+        };
+
+        const result = await this.storageAdapter.list(params.prefix || '', options);
+        return {
+          status: 'success',
+          data: result
+        };
       } catch (error) {
         return this.handleError(error);
       }
@@ -248,6 +473,7 @@ export class PhoenixApi {
     console.log('[-] PhoenixStore Server');
     console.log('='.repeat(50));
 
+    // Start HTTP server
     this.app.listen({
       port,
       hostname: '0.0.0.0'
@@ -260,10 +486,40 @@ export class PhoenixApi {
       console.log(`[>] Port: ${port}`);
       console.log('\n[*] Access Points:');
       console.log('-------------------');
-      console.log(`[+] Homepage: http://localhost:${port}`);
-      console.log(`[+] Swagger UI: http://localhost:${port}/swagger`);
-      console.log(`[+] API Base: http://localhost:${port}/api/v1`);
-      console.log('\n[!] Server is ready to accept connections\n');
+      console.log(`[+] Homepage: ${config.PHOENIXSTORE_PUBLIC_URL}`);
+      console.log(`[+] Swagger UI: ${config.PHOENIXSTORE_PUBLIC_URL}/swagger`);
+      console.log(`[+] API Base: ${config.PHOENIXSTORE_PUBLIC_URL}/api/v1`);
+      console.log(`[+] MongoDB Internal Host: ${config.MONGODB_HOST}`);
+      console.log(`[+] MongoDB URL: ${config.MONGODB_URI}`);
+      console.log(`[+] MongoExpress: ${config.MONGOEXPRESS_PUBLIC_URL}`);
+      console.log(`[+] Storage Internal Host: ${config.STORAGE_HOST}`);
+      console.log(`[+] Storage PublicURL: ${config.STORAGE_PUBLIC_URL}`);
+      console.log(`[+] Storage Console: ${config.STORAGE_CONSOLE_URL}`);
     });
+
+    // Start WebSocket server
+    this.wsServer = new WebSocketServer({
+      port: config.WEBSOCKET_PORT,
+      clientTracking: true,
+      maxPayload: 50 * 1024 * 1024, // 50MB max payload
+    });
+
+    this.wsServer.on('connection', (ws: WS) => {
+      this.store.getWebSocketManager().handleConnection(ws);
+    });
+
+    console.log(`[+] WebSocket: ${config.WEBSOCKET_PUBLIC_URL}`);
+    console.log('\n[!] Server is ready to accept connections\n');
+
+    return this.app;
+  }
+
+  public async stop() {
+    if (this.wsServer) {
+      await new Promise<void>((resolve) => {
+        this.wsServer?.close(() => resolve());
+      });
+    }
+    await this.app.stop();
   }
 } 

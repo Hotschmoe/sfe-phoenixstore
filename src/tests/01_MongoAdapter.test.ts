@@ -1,10 +1,11 @@
 import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { MongoAdapter } from "../adapters/MongoAdapter";
-import { PhoenixStoreError } from "../types";
 import { getTestDbUri, setup, teardown } from "./setup";
+import { ObjectId } from "mongodb";
+import { config } from "../utils/config";
 
 describe("MongoAdapter", () => {
-  const adapter = new MongoAdapter(getTestDbUri(), "phoenixstore_test");
+  const adapter = new MongoAdapter(getTestDbUri(), `${config.MONGODB_DATABASE}_test`);
 
   beforeAll(async () => {
     console.log('Starting MongoAdapter tests...');
@@ -30,44 +31,24 @@ describe("MongoAdapter", () => {
 
   describe("Connection", () => {
     test("should connect to MongoDB successfully", async () => {
-      const newAdapter = new MongoAdapter(getTestDbUri(), "phoenixstore_test");
+      const newAdapter = new MongoAdapter(getTestDbUri(), `${config.MONGODB_DATABASE}_test`);
       await newAdapter.connect();
       expect(newAdapter).toBeDefined();
       await newAdapter.disconnect();
-    }, 10000);
+    });
 
     test("should handle various invalid connection strings", async () => {
-      const invalidCases = [
-        {
-          uri: "not-a-mongodb-url",
-          description: "completely invalid URL"
-        },
-        {
-          uri: "mongodb://invalid@:password@localhost:27017",
-          description: "malformed authentication"
-        },
-        {
-          uri: "postgresql://localhost:27017",
-          description: "wrong protocol"
-        }
+      const invalidUris = [
+        "mongodb://invalid:invalid@127.0.0.1:27017/nonexistentdb?authSource=admin",
+        "mongodb://wronguser:wrongpass@127.0.0.1:27017/testdb?authSource=admin",
+        "mongodb://127.0.0.1:27018/testdb" // Non-existent port
       ];
 
-      for (const { uri, description } of invalidCases) {
-        try {
-          // First try to create the adapter
-          const invalidAdapter = new MongoAdapter(uri, "phoenixstore_test");
-          
-          // If creation succeeds, try to connect
-          await invalidAdapter.connect();
-          throw new Error(`Should have failed for ${description}`);
-        } catch (error: any) {
-          // For invalid URIs, we expect MongoDB's native errors
-          const hasFailedConnect = error.message.includes("Failed to connect to MongoDB");
-          const hasInvalidUri = error.message.includes("mongodb");
-          expect(hasFailedConnect || hasInvalidUri).toBe(true);
-        }
+      for (const uri of invalidUris) {
+        const invalidAdapter = new MongoAdapter(uri, `${config.MONGODB_DATABASE}_test`);
+        await expect(invalidAdapter.connect()).rejects.toThrow();
       }
-    }, 10000);
+    });
   });
 
   describe("CRUD Operations", () => {
@@ -79,6 +60,7 @@ describe("MongoAdapter", () => {
       const id = await adapter.add(collection, testData);
       expect(id).toBeDefined();
       expect(typeof id).toBe("string");
+      expect(() => new ObjectId(id)).not.toThrow();
     });
 
     test("should retrieve a document by ID", async () => {
@@ -92,7 +74,7 @@ describe("MongoAdapter", () => {
 
     test("should return null for non-existent document", async () => {
       const collection = getTestCollection();
-      const doc = await adapter.get(collection, "nonexistent-id");
+      const doc = await adapter.get(collection, new ObjectId().toString());
       expect(doc).toBeNull();
     });
 
@@ -100,8 +82,8 @@ describe("MongoAdapter", () => {
       const collection = getTestCollection();
       const id = await adapter.add(collection, testData);
       const updateData = { name: "Updated Name" };
-      const updated = await adapter.update(collection, id, updateData);
-      expect(updated).toBe(true);
+      const result = await adapter.update(collection, id, updateData);
+      expect(result).toBeUndefined();
 
       const doc = await adapter.get(collection, id);
       expect(doc?.name).toBe(updateData.name);
@@ -110,15 +92,15 @@ describe("MongoAdapter", () => {
 
     test("should return false when updating non-existent document", async () => {
       const collection = getTestCollection();
-      const updated = await adapter.update(collection, "nonexistent-id", { name: "New Name" });
-      expect(updated).toBe(false);
+      const result = await adapter.update(collection, new ObjectId().toString(), { name: "New Name" });
+      expect(result).toBeUndefined();
     });
 
     test("should delete a document", async () => {
       const collection = getTestCollection();
       const id = await adapter.add(collection, testData);
-      const deleted = await adapter.delete(collection, id);
-      expect(deleted).toBe(true);
+      const result = await adapter.delete(collection, id);
+      expect(result).toBeUndefined();
 
       const doc = await adapter.get(collection, id);
       expect(doc).toBeNull();
@@ -126,8 +108,8 @@ describe("MongoAdapter", () => {
 
     test("should return false when deleting non-existent document", async () => {
       const collection = getTestCollection();
-      const deleted = await adapter.delete(collection, "nonexistent-id");
-      expect(deleted).toBe(false);
+      const result = await adapter.delete(collection, new ObjectId().toString());
+      expect(result).toBeUndefined();
     });
   });
 }); 

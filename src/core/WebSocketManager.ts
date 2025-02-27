@@ -1,6 +1,5 @@
-import { WebSocket } from 'ws';
+import { WebSocket as WS } from 'ws';
 import { Document, Filter } from 'mongodb';
-import { nanoid } from 'nanoid/non-secure';
 import { 
   WebSocketMessage,
   WatchDocumentMessage,
@@ -24,7 +23,7 @@ export interface WebSocketManagerConfig {
 }
 
 export class WebSocketManager {
-  private clients: Map<WebSocket, WebSocketClientState> = new Map();
+  private clients: Map<WS, WebSocketClientState> = new Map();
   private watchIntervals: Map<string, NodeJS.Timer> = new Map();
   private mongoAdapter: MongoAdapter;
   private config: Required<WebSocketManagerConfig>;
@@ -43,7 +42,7 @@ export class WebSocketManager {
   }
 
   // Handle new WebSocket connection
-  public handleConnection(ws: WebSocket): void {
+  public handleConnection(ws: WS): void {
     // Check max clients limit
     if (this.clients.size >= this.config.maxClients) {
       this.sendError(ws, 'MAX_CLIENTS_REACHED', 'Maximum number of clients reached');
@@ -62,10 +61,10 @@ export class WebSocketManager {
 
     // Set up ping/pong for connection health check
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WS.OPEN) {
         ws.ping();
         const pongTimeout = setTimeout(() => {
-          if (ws.readyState === WebSocket.OPEN) {
+          if (ws.readyState === WS.OPEN) {
             ws.terminate();
           }
         }, this.config.pingTimeout);
@@ -94,11 +93,11 @@ export class WebSocketManager {
     });
 
     // Send connected message
-    this.send(ws, { type: 'connected', requestId: nanoid() });
+    this.send(ws, { type: 'connected', requestId: this.generateId() });
   }
 
   // Handle client messages
-  private async handleMessage(ws: WebSocket, message: WebSocketMessage): Promise<void> {
+  private async handleMessage(ws: WS, message: WebSocketMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState) return;
 
@@ -122,10 +121,10 @@ export class WebSocketManager {
   }
 
   // Handle authentication
-  private async handleAuth(ws: WebSocket, message: AuthMessage): Promise<void> {
+  private async handleAuth(ws: WS, message: AuthMessage): Promise<void> {
     try {
       // TODO: Implement token verification
-      const userId = 'user_' + nanoid(); // Temporary, replace with actual user ID from token
+      const userId = 'user_' + this.generateId(); // Temporary, replace with actual user ID from token
       const clientState = this.clients.get(ws);
       
       if (clientState) {
@@ -148,14 +147,14 @@ export class WebSocketManager {
   }
 
   // Handle document watch request using polling
-  private async handleWatchDocument(ws: WebSocket, message: WatchDocumentMessage): Promise<void> {
+  private async handleWatchDocument(ws: WS, message: WatchDocumentMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
       this.sendError(ws, 'UNAUTHORIZED', 'Authentication required');
       return;
     }
 
-    const subscriptionId = nanoid();
+    const subscriptionId = this.generateId();
     const subscription: Subscription = {
       id: subscriptionId,
       userId: clientState.userId,
@@ -201,7 +200,7 @@ export class WebSocketManager {
               timestamp: Date.now()
             }
           });
-          this.handleUnwatch(ws, { type: 'unwatch', requestId: nanoid(), subscriptionId });
+          this.handleUnwatch(ws, { type: 'unwatch', requestId: this.generateId(), subscriptionId });
           return;
         }
 
@@ -226,14 +225,14 @@ export class WebSocketManager {
   }
 
   // Handle collection watch request using polling
-  private async handleWatchCollection(ws: WebSocket, message: WatchCollectionMessage): Promise<void> {
+  private async handleWatchCollection(ws: WS, message: WatchCollectionMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
       this.sendError(ws, 'UNAUTHORIZED', 'Authentication required');
       return;
     }
 
-    const subscriptionId = nanoid();
+    const subscriptionId = this.generateId();
     const subscription: Subscription = {
       id: subscriptionId,
       userId: clientState.userId,
@@ -298,7 +297,7 @@ export class WebSocketManager {
   }
 
   // Handle presence system messages
-  private async handlePresence(ws: WebSocket, message: PresenceMessage): Promise<void> {
+  private async handlePresence(ws: WS, message: PresenceMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
       this.sendError(ws, 'UNAUTHORIZED', 'Authentication required');
@@ -314,7 +313,7 @@ export class WebSocketManager {
   }
 
   // Handle unwatch request
-  private async handleUnwatch(ws: WebSocket, message: UnwatchMessage): Promise<void> {
+  private async handleUnwatch(ws: WS, message: UnwatchMessage): Promise<void> {
     const clientState = this.clients.get(ws);
     if (!clientState?.userId) {
       this.sendError(ws, 'UNAUTHORIZED', 'Authentication required');
@@ -334,7 +333,7 @@ export class WebSocketManager {
   }
 
   // Handle client disconnection
-  private handleDisconnection(ws: WebSocket): void {
+  private handleDisconnection(ws: WS): void {
     const clientState = this.clients.get(ws);
     if (clientState) {
       // Clear all polling intervals
@@ -356,17 +355,17 @@ export class WebSocketManager {
   }
 
   // Utility method to send messages
-  private send(ws: WebSocket, message: any): void {
-    if (ws.readyState === WebSocket.OPEN) {
+  private send(ws: WS, message: any): void {
+    if (ws.readyState === WS.OPEN) {
       ws.send(JSON.stringify(message));
     }
   }
 
   // Utility method to send errors
-  private sendError(ws: WebSocket, code: string, message: string): void {
+  private sendError(ws: WS, code: string, message: string): void {
     this.send(ws, {
       type: 'error',
-      requestId: nanoid(),
+      requestId: this.generateId(),
       code,
       message
     });
@@ -376,7 +375,7 @@ export class WebSocketManager {
   private broadcastPresence(clientState: WebSocketClientState): void {
     const presenceUpdate: PresenceMessage = {
       type: 'presence',
-      requestId: nanoid(),
+      requestId: this.generateId(),
       action: 'update',
       userId: clientState.userId,
       status: clientState.status,
@@ -426,5 +425,10 @@ export class WebSocketManager {
       case 'array-contains-any': return '$in';
       default: return '$eq';
     }
+  }
+
+  // Replace nanoid() with a simple ID generator
+  private generateId(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   }
 } 
